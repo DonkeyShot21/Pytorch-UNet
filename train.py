@@ -1,6 +1,7 @@
 import sys
 import os
 from optparse import OptionParser
+from torch.utils.data import DataLoader
 import numpy as np
 
 import torch
@@ -11,7 +12,9 @@ from torch import optim
 
 from eval import eval_net
 from unet import UNet
-from utils import get_ids, split_ids, split_train_val, get_imgs_and_masks, batch
+
+from dataset import HelioDataset
+# from utils import get_ids, split_ids, split_train_val, get_imgs_and_masks, batch
 
 def train_net(net,
               epochs=5,
@@ -19,31 +22,21 @@ def train_net(net,
               lr=0.1,
               val_percent=0.05,
               save_cp=True,
-              gpu=False,
-              img_scale=0.5):
+              gpu=False):
 
-    dir_img = 'data/train/'
-    dir_mask = 'data/train_masks/'
+    print('''Starting training:
+                Epochs: {}
+                Batch size: {}
+                Learning rate: {}
+                Checkpoints: {}
+                CUDA: {}
+            '''.format(epochs, batch_size, lr, str(save_cp), str(gpu)))
+
     dir_checkpoint = 'checkpoints/'
 
-    ids = get_ids(dir_img)
-    ids = split_ids(ids)
-
-    iddataset = split_train_val(ids, val_percent)
-
-    print('''
-    Starting training:
-        Epochs: {}
-        Batch size: {}
-        Learning rate: {}
-        Training size: {}
-        Validation size: {}
-        Checkpoints: {}
-        CUDA: {}
-    '''.format(epochs, batch_size, lr, len(iddataset['train']),
-               len(iddataset['val']), str(save_cp), str(gpu)))
-
-    N_train = len(iddataset['train'])
+    dataset = HelioDataset('./data/SIDC_dataset.csv',
+                           'data/sDPD2014.txt',
+                           10)
 
     optimizer = optim.SGD(net.parameters(),
                           lr=lr,
@@ -52,41 +45,42 @@ def train_net(net,
 
     criterion = nn.BCELoss()
 
+    data_loader = DataLoader(dataset)
+
     for epoch in range(epochs):
         print('Starting epoch {}/{}.'.format(epoch + 1, epochs))
         net.train()
 
-        # reset the generators
-        train = get_imgs_and_masks(iddataset['train'], dir_img, dir_mask, img_scale)
-        val = get_imgs_and_masks(iddataset['val'], dir_img, dir_mask, img_scale)
-
         epoch_loss = 0
 
-        for i, b in enumerate(batch(train, batch_size)):
-            imgs = np.array([i[0] for i in b]).astype(np.float32)
-            true_masks = np.array([i[1] for i in b])
+        for _, obs in enumerate(data_loader):
+            for idx in range(0, len(obs['imgs']), batch_size):
+                imgs = obs['imgs'][idx:idx+batch_size][0].float()
+                true_masks = obs['masks'][idx:idx+batch_size].float()
 
-            imgs = torch.from_numpy(imgs)
-            true_masks = torch.from_numpy(true_masks)
+                print(imgs.size())
 
-            if gpu:
-                imgs = imgs.cuda()
-                true_masks = true_masks.cuda()
+                #imgs = torch.from_numpy(imgs).float()
+                #true_masks = torch.from_numpy(true_masks).float()
 
-            masks_pred = net(imgs)
-            masks_probs = F.sigmoid(masks_pred)
-            masks_probs_flat = masks_probs.view(-1)
+                if gpu:
+                    imgs = imgs.cuda()
+                    true_masks = true_masks.cuda()
 
-            true_masks_flat = true_masks.view(-1)
+                masks_pred = net(imgs)
+                masks_probs = F.sigmoid(masks_pred)
+                masks_probs_flat = masks_probs.view(-1)
 
-            loss = criterion(masks_probs_flat, true_masks_flat)
-            epoch_loss += loss.item()
+                true_masks_flat = true_masks.view(-1)
 
-            print('{0:.4f} --- loss: {1:.6f}'.format(i * batch_size / N_train, loss.item()))
+                loss = criterion(masks_probs_flat, true_masks_flat)
+                epoch_loss += loss.item()
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+                print('{0:.4f} --- loss: {1:.6f}'.format(i * batch_size / N_train, loss.item()))
+
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
         print('Epoch finished ! Loss: {}'.format(epoch_loss / i))
 
@@ -122,7 +116,7 @@ def get_args():
 if __name__ == '__main__':
     args = get_args()
 
-    net = UNet(n_channels=3, n_classes=1)
+    net = UNet(n_channels=2, n_classes=1)
 
     if args.load:
         net.load_state_dict(torch.load(args.load))
@@ -137,8 +131,7 @@ if __name__ == '__main__':
                   epochs=args.epochs,
                   batch_size=args.batchsize,
                   lr=args.lr,
-                  gpu=args.gpu,
-                  img_scale=args.scale)
+                  gpu=args.gpu)
     except KeyboardInterrupt:
         torch.save(net.state_dict(), 'INTERRUPTED.pth')
         print('Saved interrupt')

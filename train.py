@@ -54,12 +54,10 @@ def train_net(net,
         epoch_loss = 0
 
         for _, obs in enumerate(data_loader):
-            for idx in range(0, len(obs['imgs']), batch_size):
-                imgs = obs['imgs'][idx:idx+batch_size][0].float()
-                true_masks = obs['masks'][idx:idx+batch_size].float()
-
-                print(imgs.size())
-
+            for idx in range(0, len(obs['imgs'][0]), batch_size):
+                imgs = obs['imgs'][0][idx:idx+batch_size].float()
+                true_masks = obs['masks'][0][idx:idx+batch_size].float()
+                
                 #imgs = torch.from_numpy(imgs).float()
                 #true_masks = torch.from_numpy(true_masks).float()
 

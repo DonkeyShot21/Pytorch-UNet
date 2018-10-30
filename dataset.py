@@ -115,10 +115,7 @@ def multi_scale_slice(inputs, mask):
                 batch['masks'].append([mask_patch])
     batch["imgs"] = torch.from_numpy(np.array(batch["imgs"], dtype = np.float32))
     batch["masks"] = torch.from_numpy(np.array(batch["masks"], dtype = np.float32))
-    print(batch["imgs"].size())
     return batch
-
-
 
 
 

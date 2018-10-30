@@ -36,7 +36,7 @@ def train_net(net,
 
     dataset = HelioDataset('./data/SIDC_dataset.csv',
                            'data/sDPD2014.txt',
-                           10)
+                           50)
 
     optimizer = optim.SGD(net.parameters(),
                           lr=lr,
@@ -51,15 +51,10 @@ def train_net(net,
         print('Starting epoch {}/{}.'.format(epoch + 1, epochs))
         net.train()
 
-        epoch_loss = 0
-
         for _, obs in enumerate(data_loader):
             for idx in range(0, len(obs['imgs'][0]), batch_size):
                 imgs = obs['imgs'][0][idx:idx+batch_size].float()
                 true_masks = obs['masks'][0][idx:idx+batch_size].float()
-
-                #imgs = torch.from_numpy(imgs).float()
-                #true_masks = torch.from_numpy(true_masks).float()
 
                 if gpu:
                     imgs = imgs.cuda()
@@ -72,15 +67,14 @@ def train_net(net,
                 true_masks_flat = true_masks.view(-1)
 
                 loss = criterion(masks_probs_flat, true_masks_flat)
-                epoch_loss += loss.item()
 
-                print(idx * batch_size, ' -- loss: {1:.6f}'.format(loss.item()))
+                print(int(idx * batch_size), '-- loss: {0:.6f}'.format(loss.item()))
 
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
 
-        print('Epoch finished ! Loss: {}'.format(epoch_loss / idx))
+        print('Epoch finished!')
 
         #if 1:
         #    val_dice = eval_net(net, val, gpu)

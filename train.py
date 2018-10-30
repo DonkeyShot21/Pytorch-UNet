@@ -57,7 +57,7 @@ def train_net(net,
             for idx in range(0, len(obs['imgs'][0]), batch_size):
                 imgs = obs['imgs'][0][idx:idx+batch_size].float()
                 true_masks = obs['masks'][0][idx:idx+batch_size].float()
-                
+
                 #imgs = torch.from_numpy(imgs).float()
                 #true_masks = torch.from_numpy(true_masks).float()
 
@@ -74,17 +74,17 @@ def train_net(net,
                 loss = criterion(masks_probs_flat, true_masks_flat)
                 epoch_loss += loss.item()
 
-                print('{0:.4f} --- loss: {1:.6f}'.format(i * batch_size / N_train, loss.item()))
+                print(idx * batch_size, ' -- loss: {1:.6f}'.format(loss.item()))
 
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
 
-        print('Epoch finished ! Loss: {}'.format(epoch_loss / i))
+        print('Epoch finished ! Loss: {}'.format(epoch_loss / idx))
 
-        if 1:
-            val_dice = eval_net(net, val, gpu)
-            print('Validation Dice Coeff: {}'.format(val_dice))
+        #if 1:
+        #    val_dice = eval_net(net, val, gpu)
+        #    print('Validation Dice Coeff: {}'.format(val_dice))
 
         if save_cp:
             torch.save(net.state_dict(),

@@ -22,7 +22,8 @@ def train_net(net,
               lr=0.1,
               val_percent=0.05,
               save_cp=True,
-              gpu=False):
+              gpu=False,
+              epoch_size=10):
 
     print('''Starting training:
                 Epochs: {}
@@ -36,7 +37,7 @@ def train_net(net,
 
     dataset = HelioDataset('./data/SIDC_dataset.csv',
                            'data/sDPD2014.txt',
-                           50)
+                           epoch_size)
 
     optimizer = optim.SGD(net.parameters(),
                           lr=lr,
@@ -101,6 +102,8 @@ def get_args():
                       default=False, help='load file model')
     parser.add_option('-s', '--scale', dest='scale', type='float',
                       default=0.5, help='downscaling factor of the images')
+    parser.add_option('-z', '--epoch-size', dest='epochsize', type='int',
+                      default=10, help='size of the epochs')
 
     (options, args) = parser.parse_args()
     return options
@@ -123,7 +126,8 @@ if __name__ == '__main__':
                   epochs=args.epochs,
                   batch_size=args.batchsize,
                   lr=args.lr,
-                  gpu=args.gpu)
+                  gpu=args.gpu,
+                  epoch_size=args.epochsize)
     except KeyboardInterrupt:
         torch.save(net.state_dict(), 'INTERRUPTED.pth')
         print('Saved interrupt')

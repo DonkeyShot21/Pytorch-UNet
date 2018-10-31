@@ -75,8 +75,9 @@ def rotate_coord(map, coord, date):
     return [(int(px.x[i].value),int(px.y[i].value)) for i in range(len(px.x))]
 
 def remove_if_exists(file):
-    if os.path.exists(file):
-        os.remove(file)
+    if file != None:
+        if os.path.exists(file):
+            os.remove(file)
 
 def show_mask(img, mask):
     img = (255 * img).astype(np.uint8)
@@ -153,6 +154,7 @@ class HelioDataset(Dataset):
 
         try:
             print("Searching VSO...")
+            continuum_file, magnetic_file = None, None
             continuum_file, magnetic_file = search_VSO(start_time, end_time)
             hmi_cont = Map(continuum_file)
             hmi_mag = Map(magnetic_file)

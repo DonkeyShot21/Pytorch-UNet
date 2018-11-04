@@ -116,21 +116,33 @@ def multi_scale_slice(inputs, mask):
                 batch['masks'].append([mask_patch])
     batch["imgs"] = torch.from_numpy(np.array(batch["imgs"], dtype = np.float32))
     batch["masks"] = torch.from_numpy(np.array(batch["masks"], dtype = np.float32))
+    counts = [np.count_nonzero(m) for m in batch["masks"]]
+    indices = np.argpartition(counts, -2)[-2:]
+    batch["imgs"] = batch["imgs"][indices]
+    batch["masks"] = batch["masks"][indices]
     return batch
 
 
 
 class HelioDataset(Dataset):
-    def __init__(self, SIDC_filename, fenyi_filename, n_samples):
+    def __init__(self, SIDC_filename, fenyi_dir, n_samples):
         super(Dataset, self).__init__()
         self.n_samples = n_samples
 
         sidc_csv = pd.read_csv(SIDC_filename, sep=';', header=None)
         sidc_csv.drop(sidc_csv[[3,5,6,7]], axis=1, inplace=True)
         sidc_csv.astype(np.int32)
-        self.sidc_csv = sidc_csv[sidc_csv[0] == 2014]
 
-        self.fenyi_sunspot = pd.read_csv(fenyi_filename, sep=',')
+        self.fenyi_sunspot = []
+        years = []
+        for fenyi_fn in os.listdir(fenyi_dir):
+            years.append(int(fenyi_fn[4:8]))
+            fn = os.path.join(fenyi_dir,fenyi_fn)
+            self.fenyi_sunspot.append(pd.read_csv(fn, sep=','))
+        self.fenyi_sunspot = pd.concat(self.fenyi_sunspot)
+
+        self.sidc_csv = sidc_csv[sidc_csv[0].isin(years)]
+
 
     def __len__(self):
         return self.n_samples
@@ -143,7 +155,7 @@ class HelioDataset(Dataset):
         date = datetime.strptime(day + ' 12:00:00', '%Y/%m/%d %H:%M:%S')
 
         # loading sunspot data from DPD
-        print("Loading sunspot data...")
+        print("Loading sunspot data...", date)
         dpd = self.fenyi_sunspot.query(("year == @date.year & "
                                         "month == @date.month & "
                                         "day == @date.day"))
@@ -243,8 +255,8 @@ class HelioDataset(Dataset):
 
 if __name__ == '__main__':
 
-    dataset = HelioDataset('./data/SIDC_dataset.csv',
-                           'data/sDPD2014.txt',
+    dataset = HelioDataset('data/SIDC_dataset.csv',
+                           'data/fenyi',
                            10)
 
     data_loader = DataLoader(dataset)

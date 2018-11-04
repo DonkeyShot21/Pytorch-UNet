@@ -92,7 +92,7 @@ if __name__ == "__main__":
     print("Model loaded !")
 
     dataset = HelioDataset('./data/SIDC_dataset.csv',
-                           'data/sDPD2014.txt',
+                           'data/fenyi',
                            1)
     data_loader = DataLoader(dataset)
 

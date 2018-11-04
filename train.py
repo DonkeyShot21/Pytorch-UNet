@@ -14,6 +14,8 @@ from eval import eval_net
 from unet import UNet
 
 from dataset import HelioDataset
+from dice_loss import dice_coeff
+
 # from utils import get_ids, split_ids, split_train_val, get_imgs_and_masks, batch
 
 def train_net(net,
@@ -27,7 +29,7 @@ def train_net(net,
 
     print('''Starting training:
                 Epochs: {}
-                Batch size: {}
+                Batch : {}
                 Learning rate: {}
                 Checkpoints: {}
                 CUDA: {}
@@ -35,8 +37,8 @@ def train_net(net,
 
     dir_checkpoint = 'checkpoints/'
 
-    dataset = HelioDataset('./data/SIDC_dataset.csv',
-                           'data/sDPD2014.txt',
+    dataset = HelioDataset('data/SIDC_dataset.csv',
+                           'data/fenyi',
                            epoch_size)
 
     optimizer = optim.SGD(net.parameters(),
@@ -44,7 +46,7 @@ def train_net(net,
                           momentum=0.9,
                           weight_decay=0.0005)
 
-    criterion = nn.BCELoss()
+    bce = nn.BCELoss()
 
     data_loader = DataLoader(dataset)
 
@@ -67,9 +69,12 @@ def train_net(net,
 
                 true_masks_flat = true_masks.view(-1)
 
-                loss = criterion(masks_probs_flat, true_masks_flat)
+                bce_loss = bce(masks_probs_flat, true_masks_flat)
+                dice_loss = dice_coeff(masks_probs, true_masks)
 
-                print(int(idx * batch_size), '-- loss: {0:.6f}'.format(loss.item()))
+                loss = bce_loss
+
+                print(int(idx * batch_size), '-- loss: {0:.6f} | bce_loss: {1:.6f} | dice_loss {2:.6f} '.format(loss.item(), bce_loss.item(), dice_loss.item()))
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -92,8 +97,8 @@ def get_args():
     parser = OptionParser()
     parser.add_option('-e', '--epochs', dest='epochs', default=5, type='int',
                       help='number of epochs')
-    parser.add_option('-b', '--batch-size', dest='batchsize', default=10,
-                      type='int', help='batch size')
+    parser.add_option('-b', '--batch-size', dest='batch', default=10,
+                      type='int', help='batch ')
     parser.add_option('-l', '--learning-rate', dest='lr', default=0.1,
                       type='float', help='learning rate')
     parser.add_option('-g', '--gpu', action='store_true', dest='gpu',
@@ -102,8 +107,8 @@ def get_args():
                       default=False, help='load file model')
     parser.add_option('-s', '--scale', dest='scale', type='float',
                       default=0.5, help='downscaling factor of the images')
-    parser.add_option('-z', '--epoch-size', dest='epochsize', type='int',
-                      default=10, help='size of the epochs')
+    parser.add_option('-z', '--epoch-size', dest='epoch', type='int',
+                      default=10, help=' of the epochs')
 
     (options, args) = parser.parse_args()
     return options
@@ -124,10 +129,10 @@ if __name__ == '__main__':
     try:
         train_net(net=net,
                   epochs=args.epochs,
-                  batch_size=args.batchsize,
+                  batch_size=args.batch,
                   lr=args.lr,
                   gpu=args.gpu,
-                  epoch_size=args.epochsize)
+                  epoch_size=args.epoch)
     except KeyboardInterrupt:
         torch.save(net.state_dict(), 'INTERRUPTED.pth')
         print('Saved interrupt')

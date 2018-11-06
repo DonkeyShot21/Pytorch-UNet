@@ -1,9 +1,12 @@
 import matplotlib.pyplot as plt
+import numpy as np
+import cv2
+from PIL import Image
 
 # FENNEC'S VISUALIZATION functions
 
 def plot_mask(img, mask, show):
-    img = (255 * img).astype(np.uint8)
+    mask = np.array(mask * 255, dtype=np.uint8)
     mask = np.dstack((mask,mask,mask))
     mask = cv2.cvtColor(mask, cv2.COLOR_RGB2GRAY)
     ret, binary = cv2.threshold(mask, 40, 255, cv2.THRESH_BINARY)
@@ -14,8 +17,9 @@ def plot_mask(img, mask, show):
     b,g,r = cv2.split(img)
     r = cv2.add(b, 30, dst = b, mask = binary, dtype = cv2.CV_8U)
     cv2.merge((b,g,r), img)
+    img = Image.fromarray(img)
     if show:
-        Image.fromarray(img).show()
+        img.show()
     return img
 
 # -----------------------------------------------------------------------------

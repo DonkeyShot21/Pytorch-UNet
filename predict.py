@@ -103,12 +103,12 @@ if __name__ == "__main__":
                            1)
     data_loader = DataLoader(dataset)
 
-    predicted_mask_slices = []
+    pred_mask_slices = []
     cont_image = None
     true_mask = None
 
     for _, obs in enumerate(data_loader):
-        cont_image = np.array(obs["img"][0])
+        cont_image = np.array(obs["img"][0][0])
         true_mask = np.array(obs["mask"][0])
         obs = slice(obs, args.window, args.window)
         for idx in range(0, len(obs['imgs']), args.batch_size):
@@ -121,24 +121,26 @@ if __name__ == "__main__":
                                 use_dense_crf= args.crf,
                                 use_gpu= not args.cpu)
 
-            predicted_mask_slices.extend(masks)
+            pred_mask_slices.extend(masks.squeeze())
 
-    h, v  = cont_image.shape[0] // args.window, cont_image[1] // args.window
-    square = tuple([h,v] + np.array(predicted_mask_slices).shape[1:])
-    predicted_mask = np.hstack([np.vstack(a) for a in predicted_mask_slices.reshape(square)])
+    pred_mask_slices = np.array(pred_mask_slices)
+    n = cont_image.shape[0] // args.window
+    rows = [pred_mask_slices[i:i+n] for i in range(0,len(pred_mask_slices),n)]
+    rows = np.array(rows)
+    predicted_mask = np.vstack([np.hstack(a) for a in pred_mask_slices])
 
     if args.viz:
         print("Visualizing results for image {}, close to continue ...".format(fn))
-        plot_mask(to_uint8(cont_img), mask, True)
-        plot_mask(to_uint8(cont_img), true_mask, True)
+        plot_mask(to_uint8(cont_image), mask, True)
+        plot_mask(to_uint8(cont_image), true_mask, True)
 
     if not args.no_save:
         out_fn = "results/predicted.bmp"
-        result = plot_mask(to_uint8(cont_img), mask, False)
+        result = plot_mask(to_uint8(cont_image), predicted_mask, False)
         result.save(out_fn)
         print("Predicted mask saved to {}".format(out_fn))
 
         out_fn = "results/true_mask.bmp"
-        true_mask = plot_mask(to_uint8(cont_img), true_mask, False)
+        true_mask = plot_mask(to_uint8(cont_image), true_mask, False)
         true_mask.save(out_fn)
         print("True mask saved to {}".format(out_fn))

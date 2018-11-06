@@ -127,7 +127,7 @@ if __name__ == "__main__":
     n = cont_image.shape[0] // args.window
     rows = [pred_mask_slices[i:i+n] for i in range(0,len(pred_mask_slices),n)]
     rows = np.array(rows)
-    predicted_mask = np.vstack([np.hstack(a) for a in pred_mask_slices])
+    predicted_mask = np.vstack([np.hstack(a) for a in rows])
 
     if args.viz:
         print("Visualizing results for image {}, close to continue ...".format(fn))

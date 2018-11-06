@@ -8,6 +8,48 @@ import numpy as np
 from PIL import Image
 
 from .utils import resize_and_crop, get_square, normalize, hwc_to_chw
+from sunpy.net.vso import VSOClient
+
+
+# FENNEC'S loading functions
+
+def search_VSO(start_time, end_time):
+    client = VSOClient()
+    query_response = client.query_legacy(tstart=start_time,
+                                         tend=end_time,
+                                         instrument='HMI',
+                                         physobs='intensity',
+                                         sample=3600)
+    results = client.fetch(query_response[:1],
+                           path='./tmp/{file}',
+                           site='rob')
+    continuum_file = results.wait()
+
+    query_response = client.query_legacy(tstart=start_time,
+                                         tend=end_time,
+                                         instrument='HMI',
+                                         physobs='los_magnetic_field',
+                                         sample=3600)
+    results = client.fetch(query_response[:1],
+                           path='./tmp/{file}',
+                           site='rob')
+    magnetic_file = results.wait()
+    return continuum_file[0], magnetic_file[0]
+
+def normalize_map(map):
+    img = map.data
+    img[np.isnan(img)] = 0
+    img_min = np.amin(img)
+    img_max = np.amax(img)
+    return (img - img_min) / (img_max - img_min)
+
+def remove_if_exists(file):
+    if file != None:
+        if os.path.exists(file):
+            os.remove(file)
+
+# -----------------------------------------------------------------------------
+
 
 
 def get_ids(dir):

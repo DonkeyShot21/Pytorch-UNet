@@ -5,122 +5,25 @@ import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 
-import astropy.units as u
-from astropy.coordinates import SkyCoord
-
 import sunpy.map
 from sunpy.time import parse_time
-from sunpy.coordinates import frames
-from sunpy.physics.differential_rotation import solar_rotate_coordinate
 
 from astropy.units import Quantity
 from sunpy.map import Map
-from sunpy.net.vso import VSOClient
 
-import cv2
-import torch
+import cv2, torch
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
-import os
+import os, math
 import numpy as np
 from torchvision.transforms import Compose
-import math
+
+from utils.load import search_VSO, normalize_map, remove_if_exists
+from utils.utils import slice, rotate_coord, keep_best
 
 import warnings
 warnings.filterwarnings('ignore')
 
-
-
-
-
-def search_VSO(start_time, end_time):
-    client = VSOClient()
-    query_response = client.query_legacy(tstart=start_time,
-                                         tend=end_time,
-                                         instrument='HMI',
-                                         physobs='intensity',
-                                         sample=3600)
-    results = client.fetch(query_response[:1],
-                           path='./tmp/{file}',
-                           site='rob')
-    continuum_file = results.wait()
-
-    query_response = client.query_legacy(tstart=start_time,
-                                         tend=end_time,
-                                         instrument='HMI',
-                                         physobs='los_magnetic_field',
-                                         sample=3600)
-    results = client.fetch(query_response[:1],
-                           path='./tmp/{file}',
-                           site='rob')
-    magnetic_file = results.wait()
-    return continuum_file[0], magnetic_file[0]
-
-def normalize_map(map):
-    img = map.data
-    img[np.isnan(img)] = 0
-    img_min = np.amin(img)
-    img_max = np.amax(img)
-    return (img - img_min) / (img_max - img_min)
-
-def rotate_coord(map, coord, date):
-    coord_sc = SkyCoord(
-        [(float(v[1]),float(v[0])) * u.deg for v in np.array(coord)],
-        obstime=date,
-        frame=frames.HeliographicCarrington)
-    coord_sc = coord_sc.transform_to(frames.Helioprojective)
-    rotated_coord_sc = solar_rotate_coordinate(coord_sc, map.date)
-
-    px = map.world_to_pixel(rotated_coord_sc)
-    return [(int(px.x[i].value),int(px.y[i].value)) for i in range(len(px.x))]
-
-def remove_if_exists(file):
-    if file != None:
-        if os.path.exists(file):
-            os.remove(file)
-
-def show_mask(img, mask):
-    img = (255 * img).astype(np.uint8)
-    mask = np.dstack((mask,mask,mask))
-    mask = cv2.cvtColor(mask, cv2.COLOR_RGB2GRAY)
-    ret, binary = cv2.threshold(mask, 40, 255, cv2.THRESH_BINARY)
-    im2,contours,hierarchy = cv2.findContours(binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-    for contour in contours:
-        cv2.drawContours(img, contour, -1, (255,0,0), thickness = 1)
-    img = np.dstack((img,img,img))
-    b,g,r = cv2.split(img)
-    r = cv2.add(b, 30, dst = b, mask = binary, dtype = cv2.CV_8U)
-    cv2.merge((b,g,r), img)
-    Image.fromarray(img).show()
-
-def multi_scale_slice(inputs, mask):
-    cont = inputs[0]
-    mag = inputs[1]
-    batch = {'imgs': [], 'masks': []}
-    for stride in [1024]:
-        for x in range(0, inputs.shape[1], stride):
-            for y in range(0, inputs.shape[2], stride):
-                mask_patch = mask[x:x+stride,y:y+stride]
-                if np.count_nonzero(mask_patch) == 0:
-                    continue
-                cont_patch = cont[x:x+stride,y:y+stride]
-                mag_patch = mag[x:x+stride,y:y+stride]
-                if stride != 1024:
-                    cont_patch = cv2.resize(cont_patch, (1024,1024),
-                                    interpolation=cv2.INTER_AREA)
-                    mag_patch = cv2.resize(mag_patch, (1024,1024),
-                                    interpolation=cv2.INTER_AREA)
-                    mask_patch = cv2.resize(mask_patch, (1024,1024),
-                                    interpolation=cv2.INTER_NEAREST)
-                batch['imgs'].append([cont_patch, mag_patch])
-                batch['masks'].append([mask_patch])
-    batch["imgs"] = torch.from_numpy(np.array(batch["imgs"], dtype = np.float32))
-    batch["masks"] = torch.from_numpy(np.array(batch["masks"], dtype = np.float32))
-    counts = [np.count_nonzero(m) for m in batch["masks"]]
-    indices = np.argpartition(counts, -2)[-2:]
-    batch["imgs"] = batch["imgs"][indices]
-    batch["masks"] = batch["masks"][indices]
-    return batch
 
 
 
@@ -203,7 +106,7 @@ class HelioDataset(Dataset):
                 ws.loc[row.name,'projected_whole_spot'] = area
 
         groups = list(ws['group_number'].unique())
-        disk_mask = np.where(255*img_cont > 15)
+        disk_mask = np.where(255*img_cont > 10)
         disk_mask = {(c[0],c[1]) for c in np.column_stack(disk_mask)}
         disk_mask_num_px = len(disk_mask)
         whole_spot_mask = set()
@@ -219,7 +122,7 @@ class HelioDataset(Dataset):
             distance = np.linalg.norm(tuple(j-k for j,k in zip(center,p)))
             cosine_amplifier = math.cos(math.radians(1) * distance / center[0])
             norm_num_px = cosine_amplifier * ws.iloc[i]['projected_whole_spot']
-            ss_num_px = 8.7 * norm_num_px * disk_mask_num_px / 10e6
+            ss_num_px = 8.6 * norm_num_px * disk_mask_num_px / 10e6
 
             new = set([(p[1] - o + low[1][0], p[0] - o + low[0][0])])
             whole_spot = set()
@@ -246,8 +149,7 @@ class HelioDataset(Dataset):
         remove_if_exists(continuum_file)
         remove_if_exists(magnetic_file)
 
-        batch = multi_scale_slice(inputs, mask)
-        return batch
+        return {"img": inputs.astype(np.float32), "mask": mask}
 
 
 

@@ -1,5 +1,48 @@
-import random
+import random, torch
 import numpy as np
+
+from astropy.coordinates import SkyCoord
+import astropy.units as u
+from sunpy.coordinates import frames
+from sunpy.physics.differential_rotation import solar_rotate_coordinate
+
+# FENNEC'S FUNCTIONS
+
+def rotate_coord(map, coord, date):
+    coord_sc = SkyCoord(
+        [(float(v[1]),float(v[0])) * u.deg for v in np.array(coord)],
+        obstime=date,
+        frame=frames.HeliographicCarrington)
+    coord_sc = coord_sc.transform_to(frames.Helioprojective)
+    rotated_coord_sc = solar_rotate_coordinate(coord_sc, map.date)
+
+    px = map.world_to_pixel(rotated_coord_sc)
+    return [(int(px.x[i].value),int(px.y[i].value)) for i in range(len(px.x))]
+
+def slice(obs, window, stride):
+    cont = obs["img"][0][0]
+    mag = obs["img"][0][1]
+    mask = obs["mask"][0]
+    slices = {'imgs': [], 'masks': []}
+    for x in range(0, cont.shape[0]-window+1, stride):
+        for y in range(0, cont.shape[1]-window+1, stride):
+            mask_patch = mask[x:x+window,y:y+window]
+            cont_patch = cont[x:x+window,y:y+window]
+            mag_patch = mag[x:x+window,y:y+window]
+            slices['imgs'].append(torch.stack([cont_patch, mag_patch]))
+            slices['masks'].append(torch.stack([mask_patch]))
+    slices["imgs"] = torch.stack(slices["imgs"])
+    slices["masks"] = torch.stack(slices["masks"])
+    return slices
+
+def keep_best(obs, n):
+    counts = [np.count_nonzero(m) for m in obs["masks"]]
+    indices = np.argpartition(counts, -n)[-n:]
+    obs["imgs"] = obs["imgs"][indices]
+    obs["masks"] = obs["masks"][indices]
+    return obs
+
+# ------------------------------------------------------------------------------
 
 
 def get_square(img, pos):

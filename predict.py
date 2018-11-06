@@ -8,16 +8,18 @@ import torch.nn.functional as F
 from PIL import Image
 
 from unet import UNet
-from utils import resize_and_crop, normalize, split_img_into_squares, hwc_to_chw, merge_masks, dense_crf
-from utils import plot_img_and_mask
+from utils import resize_and_crop, normalize, split_img_into_squares, hwc_to_chw
+from utils import plot_img_and_mask, merge_masks, dense_crf
+from utils import slice, keep_best, plot_mask
 
 from torchvision import transforms
 
 from dataset import HelioDataset
 from torch.utils.data import DataLoader
+import cv2
 
 def predict_img(net,
-                img,
+                imgs,
                 out_threshold=0.5,
                 use_dense_crf=False,
                 use_gpu=False):
@@ -25,15 +27,16 @@ def predict_img(net,
     net.eval()
 
     if use_gpu:
-        img = img.cuda()
+        imgs = imgs.cuda()
 
     with torch.no_grad():
-        output_img = net(img)
-        output_probs = F.sigmoid(output_img).squeeze(0)
-        output_probs = output_probs.cpu().numpy()[0]
+        output_imgs = net(imgs)
+        output_probs = F.sigmoid(output_imgs)
+        output_probs = output_probs.cpu().numpy()
 
     if use_dense_crf:
-        output_probs = dense_crf(np.array(output_probs).astype(np.uint8), output_probs)
+        rgb = cv2.cvtColor(np.array(img[0][0] * 255, dtype=np.uint8),cv2.COLOR_GRAY2RGB)
+        output_probs = dense_crf(rgb, output_probs)
 
     return output_probs > out_threshold
 
@@ -62,16 +65,20 @@ def get_args():
     parser.add_argument('--mask-threshold', '-t', type=float,
                         help="Minimum probability value to consider a mask pixel white",
                         default=0.5)
-    parser.add_argument('--scale', '-s', type=float,
-                        help="Scale factor for the input images",
-                        default=0.5)
+    parser.add_argument('--window', '-w', type=int,
+                        help="Size of each window/slice of the images",
+                        default=512)
+    parser.add_argument('--batch-size', '-b', type=int,
+                        help="Batch size",
+                        default=16)
 
     return parser.parse_args()
 
+def to_image(img):
+    return Image.fromarray((img * 255).astype(np.uint8))
 
-
-def mask_to_image(mask):
-    return Image.fromarray((mask * 255).astype(np.uint8))
+def to_uint8(img):
+    return np.array(img * 255, dtype=np.uint8)
 
 if __name__ == "__main__":
     args = get_args()
@@ -96,34 +103,42 @@ if __name__ == "__main__":
                            1)
     data_loader = DataLoader(dataset)
 
+    predicted_mask_slices = []
+    cont_image = None
+    true_mask = None
 
     for _, obs in enumerate(data_loader):
-        for idx in range(0, len(obs['imgs'][0])):
-            print("\nPredicting image {} ...".format(idx))
+        cont_image = np.array(obs["img"][0])
+        true_mask = np.array(obs["mask"][0])
+        obs = slice(obs, args.window, args.window)
+        for idx in range(0, len(obs['imgs']), args.batch_size):
+            print("\nPredicting images {0} - {1} ...".format(idx, idx+args.batch_size))
+            imgs = obs['imgs'][idx:idx+args.batch_size].float()
 
-            img = obs['imgs'][0][idx:idx+1].float()
-            true_mask = obs['masks'][0][idx:idx+1].float()
+            masks = predict_img(net=net,
+                                imgs=imgs,
+                                out_threshold=args.mask_threshold,
+                                use_dense_crf= args.crf,
+                                use_gpu= not args.cpu)
 
-            mask = predict_img(net=net,
-                               img=img,
-                               out_threshold=args.mask_threshold,
-                               use_dense_crf= args.crf,
-                               use_gpu= not args.cpu)
+            predicted_mask_slices.extend(masks)
 
-            if args.viz:
-                print("Visualizing results for image {}, close to continue ...".format(fn))
-                plot_img_and_mask(img, mask)
+    h, v  = cont_image.shape[0] // args.window, cont_image[1] // args.window
+    square = tuple([h,v] + np.array(predicted_mask_slices).shape[1:])
+    predicted_mask = np.hstack([np.vstack(a) for a in predicted_mask_slices.reshape(square)])
 
-            if not args.no_save:
-                out_fn = "results/predict" + str(idx) + ".bmp"
-                result = mask_to_image(mask)
-                result.save(out_fn)
-                print("Mask saved to {}".format(out_fn))
+    if args.viz:
+        print("Visualizing results for image {}, close to continue ...".format(fn))
+        plot_mask(to_uint8(cont_img), mask, True)
+        plot_mask(to_uint8(cont_img), true_mask, True)
 
-                out_fn = "results/img" + str(idx) + ".bmp"
-                img = mask_to_image(img.cpu().numpy()[0][0])
-                img.save(out_fn)
+    if not args.no_save:
+        out_fn = "results/predicted.bmp"
+        result = plot_mask(to_uint8(cont_img), mask, False)
+        result.save(out_fn)
+        print("Predicted mask saved to {}".format(out_fn))
 
-                out_fn = "results/true_mask" + str(idx) + ".bmp"
-                true_mask = mask_to_image(true_mask.cpu().numpy()[0][0])
-                true_mask.save(out_fn)
+        out_fn = "results/true_mask.bmp"
+        true_mask = plot_mask(to_uint8(cont_img), true_mask, False)
+        true_mask.save(out_fn)
+        print("True mask saved to {}".format(out_fn))

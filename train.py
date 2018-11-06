@@ -16,6 +16,8 @@ from unet import UNet
 from dataset import HelioDataset
 from dice_loss import dice_coeff
 
+from utils.utils import keep_best, slice
+
 # from utils import get_ids, split_ids, split_train_val, get_imgs_and_masks, batch
 
 def train_net(net,
@@ -25,7 +27,9 @@ def train_net(net,
               val_percent=0.05,
               save_cp=True,
               gpu=False,
-              epoch_size=10):
+              epoch_size=10,
+              window=512,
+              obs_size=10):
 
     print('''Starting training:
                 Epochs: {}
@@ -55,9 +59,11 @@ def train_net(net,
         net.train()
 
         for _, obs in enumerate(data_loader):
-            for idx in range(0, len(obs['imgs'][0]), batch_size):
-                imgs = obs['imgs'][0][idx:idx+batch_size].float()
-                true_masks = obs['masks'][0][idx:idx+batch_size].float()
+            obs = keep_best(slice(obs, window, window // 2), obs_size)
+
+            for idx in range(0, len(obs['imgs']), batch_size):
+                imgs = obs['imgs'][idx:idx+batch_size].float()
+                true_masks = obs['masks'][idx:idx+batch_size].float()
 
                 if gpu:
                     imgs = imgs.cuda()
@@ -69,12 +75,9 @@ def train_net(net,
 
                 true_masks_flat = true_masks.view(-1)
 
-                bce_loss = bce(masks_probs_flat, true_masks_flat)
-                dice_loss = dice_coeff(masks_probs, true_masks)
+                loss = bce(masks_probs_flat, true_masks_flat)
 
-                loss = bce_loss
-
-                print(int(idx * batch_size), '-- loss: {0:.6f} | bce_loss: {1:.6f} | dice_loss {2:.6f} '.format(loss.item(), bce_loss.item(), dice_loss.item()))
+                print(int(idx),'-',int(idx+batch_size),'> loss: {0:.6f}'.format(loss.item()))
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -88,7 +91,7 @@ def train_net(net,
 
         if save_cp:
             torch.save(net.state_dict(),
-                       dir_checkpoint + 'CP{}.pth'.format(epoch + 1))
+                       dir_checkpoint + 'CP512-{}.pth'.format(epoch + 1))
             print('Checkpoint {} saved !'.format(epoch + 1))
 
 
@@ -109,6 +112,9 @@ def get_args():
                       default=0.5, help='downscaling factor of the images')
     parser.add_option('-z', '--epoch-size', dest='epoch', type='int',
                       default=10, help=' of the epochs')
+    parser.add_option('-w', '--window', type='int', dest='window', default=512,
+                      help="size of each window/slice of the images")
+    parser.add_option('-y', '--obs-size', dest='obs_size', default=10)
 
     (options, args) = parser.parse_args()
     return options
@@ -132,7 +138,9 @@ if __name__ == '__main__':
                   batch_size=args.batch,
                   lr=args.lr,
                   gpu=args.gpu,
-                  epoch_size=args.epoch)
+                  epoch_size=args.epoch,
+                  window=args.window,
+                  obs_size=args.obs_size)
     except KeyboardInterrupt:
         torch.save(net.state_dict(), 'INTERRUPTED.pth')
         print('Saved interrupt')

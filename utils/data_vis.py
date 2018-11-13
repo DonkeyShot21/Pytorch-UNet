@@ -5,7 +5,7 @@ from PIL import Image
 
 # FENNEC'S VISUALIZATION functions
 
-def plot_mask(img, mask, show):
+def plot_mask(img, mask):
     mask = np.array(mask * 255, dtype=np.uint8)
     mask = np.dstack((mask,mask,mask))
     mask = cv2.cvtColor(mask, cv2.COLOR_RGB2GRAY)
@@ -17,10 +17,7 @@ def plot_mask(img, mask, show):
     b,g,r = cv2.split(img)
     r = cv2.add(b, 30, dst = b, mask = binary, dtype = cv2.CV_8U)
     cv2.merge((b,g,r), img)
-    img = Image.fromarray(img)
-    if show:
-        img.show()
-    return img
+    return Image.fromarray(img)
 
 # -----------------------------------------------------------------------------
 

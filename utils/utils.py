@@ -20,17 +20,15 @@ def rotate_coord(map, coord, date):
     return [(int(px.x[i].value),int(px.y[i].value)) for i in range(len(px.x))]
 
 def slice(obs, window, stride):
-    cont = obs["img"][0][0]
-    mag = obs["img"][0][1]
+    img = obs["img"][0]
     mask = obs["mask"][0]
     slices = {'imgs': [], 'masks': []}
-    for x in range(0, cont.shape[0]-window+1, stride):
-        for y in range(0, cont.shape[1]-window+1, stride):
-            mask_patch = mask[x:x+window,y:y+window]
-            cont_patch = cont[x:x+window,y:y+window]
-            mag_patch = mag[x:x+window,y:y+window]
-            slices['imgs'].append(torch.stack([cont_patch, mag_patch]))
-            slices['masks'].append(torch.stack([mask_patch]))
+    for x in range(0, img.shape[1]-window+1, stride):
+        for y in range(0, img.shape[2]-window+1, stride):
+            mask_patch = mask[:,x:x+window,y:y+window]
+            img_patch = img[:,x:x+window,y:y+window]
+            slices['imgs'].append(img_patch)
+            slices['masks'].append(mask_patch)
     slices["imgs"] = torch.stack(slices["imgs"])
     slices["masks"] = torch.stack(slices["masks"])
     return slices

@@ -83,7 +83,7 @@ def to_uint8(img):
 if __name__ == "__main__":
     args = get_args()
 
-    net = UNet(n_channels=2, n_classes=1)
+    net = UNet(n_channels=2, n_classes=2)
 
     print("Loading model {}".format(args.model))
 
@@ -109,7 +109,7 @@ if __name__ == "__main__":
 
     for _, obs in enumerate(data_loader):
         cont_image = np.array(obs["img"][0][0])
-        true_mask = np.array(obs["mask"][0])
+        true_masks = np.array(obs["mask"][0])
         obs = slice(obs, args.window, args.window)
         for idx in range(0, len(obs['imgs']), args.batch_size):
             print("\nPredicting images {0} - {1} ...".format(idx, idx+args.batch_size))
@@ -126,21 +126,28 @@ if __name__ == "__main__":
     pred_mask_slices = np.array(pred_mask_slices)
     n = cont_image.shape[0] // args.window
     rows = [pred_mask_slices[i:i+n] for i in range(0,len(pred_mask_slices),n)]
-    rows = np.array(rows)
-    predicted_mask = np.vstack([np.hstack(a) for a in rows])
+    cols = np.array([np.concatenate(r,axis=2) for r in np.array(rows)])
+    predicted_masks = np.concatenate(cols,axis=1)
+
+    predicted_result = []
+    true_mask_result = []
+    for i in range(len(predicted_masks)):
+        predicted_result.append(plot_mask(to_uint8(cont_image), predicted_masks[i]))
+    for i in range(len(true_masks)):
+        true_mask_result.append(plot_mask(to_uint8(cont_image), true_masks[i]))
 
     if args.viz:
-        print("Visualizing results for image {}, close to continue ...".format(fn))
-        plot_mask(to_uint8(cont_image), mask, True)
-        plot_mask(to_uint8(cont_image), true_mask, True)
+        for i in range(len(predicted_result)):
+            predicted_result[i].show()
+        for i in range(len(true_mask_result)):
+            true_mask_result[i].show()
 
     if not args.no_save:
-        out_fn = "results/predicted.bmp"
-        result = plot_mask(to_uint8(cont_image), predicted_mask, False)
-        result.save(out_fn)
-        print("Predicted mask saved to {}".format(out_fn))
-
-        out_fn = "results/true_mask.bmp"
-        true_mask = plot_mask(to_uint8(cont_image), true_mask, False)
-        true_mask.save(out_fn)
-        print("True mask saved to {}".format(out_fn))
+        for i in range(len(predicted_result)):
+            out_fn = "results/predicted{}.bmp".format(i)
+            predicted_result[i].save(out_fn)
+            print("Predicted mask saved to {}".format(out_fn))
+        for i in range(len(true_mask_result)):
+            out_fn = "results/true_mask{}.bmp".format(i)
+            true_mask_result[i].save(out_fn)
+            print("True mask saved to {}".format(out_fn))

@@ -62,6 +62,7 @@ class HelioDataset(Dataset):
         dpd = self.fenyi_sunspot.query(("year == @date.year & "
                                         "month == @date.month & "
                                         "day == @date.day"))
+        dpd = dpd[(dpd[['projected_umbra','projected_whole_spot']].T != 0).any()]
 
         time = datetime.strptime('-'.join([str(i) for i in list(dpd.iloc[0])[1:7]]), '%Y-%m-%d-%H-%M-%S')
         start_time = (time - timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')
@@ -91,25 +92,28 @@ class HelioDataset(Dataset):
         sunspots = rotate_coord(hmi_cont, ss_coord, ss_date)
 
         # mask = (255 * img_cont).astype(np.uint8)
-        mask = np.zeros(img_cont.shape, dtype=np.float32)
+        mask = np.zeros(inputs.shape, dtype=np.float32)
 
-        ws = dpd[['projected_whole_spot',
+        u_ws = dpd[['projected_umbra',
+                  'projected_whole_spot',
                   'group_number',
-                  'group_spot_number']]
+                  'group_spot_number']].dropna()
 
-        for index, row in ws.iterrows():
-            wsa = row['projected_whole_spot']
-            if wsa < 0:
-                match = ws.query(("group_number == @row.group_number & "
-                                  "group_spot_number == -@wsa"))
-                area = match['projected_whole_spot'].iloc[0]
-                ws.loc[row.name,'projected_whole_spot'] = area
+        for index, row in u_ws.iterrows():
+            for feature in ['projected_umbra', 'projected_whole_spot']:
+                a = row[feature]
+                if a < 0:
+                    match = u_ws.query(("group_number == @row.group_number & "
+                                        "group_spot_number == -@a"))
+                    area = match[feature].iloc[0]
+                    u_ws.loc[row.name,feature] = area
 
-        groups = list(ws['group_number'].unique())
+        groups = list(u_ws['group_number'].unique())
         disk_mask = np.where(255*img_cont > 10)
         disk_mask = {(c[0],c[1]) for c in np.column_stack(disk_mask)}
         disk_mask_num_px = len(disk_mask)
         whole_spot_mask = set()
+        umbra_mask = set()
 
         for i in range(len(sunspots)):
             o = 4 # offset
@@ -121,29 +125,41 @@ class HelioDataset(Dataset):
             center = (img_cont.shape[0] / 2, img_cont.shape[1] / 2)
             distance = np.linalg.norm(tuple(j-k for j,k in zip(center,p)))
             cosine_amplifier = math.cos(math.radians(1) * distance / center[0])
-            norm_num_px = cosine_amplifier * ws.iloc[i]['projected_whole_spot']
+            pws =  u_ws.iloc[i]['projected_whole_spot']
+            norm_num_px = cosine_amplifier * pws
             ss_num_px = 8.6 * norm_num_px * disk_mask_num_px / 10e6
+            umbra_num_px = ss_num_px * u_ws.iloc[i]['projected_umbra'] / pws
 
             new = set([(p[1] - o + low[1][0], p[0] - o + low[0][0])])
             whole_spot = set()
+            umbra = set()
             candidates = dict()
-            expansion_rate = 3
-            while len(whole_spot) < ss_num_px:
+            expansion_rate = 10
+            while len(whole_spot) + len(umbra) < ss_num_px:
                 expand = {(n[0]+i,n[1]+j)
                           for i in [-1,0,1]
                           for j in [-1,0,1]
                           for n in new}
-                for e in set(expand - whole_spot):
+                for e in set(expand - whole_spot -umbra):
                     candidates[e] = img_cont[e]
                 new = sorted(candidates, key=candidates.get)[:expansion_rate]
                 for n in new:
                     candidates.pop(n, None)
-                whole_spot.update(set(new))
+                    if len(umbra) >= umbra_num_px:
+                        whole_spot.add(n)
+                    else:
+                        umbra.add(n)
 
             whole_spot_mask.update(whole_spot)
+            umbra_mask.update(umbra)
+            #umbra_candidates = {u:img_cont[u] for u in whole_spot}
+            #umbra_candidates = sorted(umbra_candidates, key=umbra_candidates.get)[:int(umbra_num_px)]
+            #umbra_mask.update(set(umbra_candidates))
 
         for c in set.intersection(whole_spot_mask, disk_mask):
-            mask[c] = 1
+            mask[0][c] = 1
+        for c in set.intersection(umbra_mask, disk_mask):
+            mask[1][c] = 1
 
         # show_mask(img_cont, mask)
         remove_if_exists(continuum_file)

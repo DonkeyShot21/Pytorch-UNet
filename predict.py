@@ -131,16 +131,16 @@ if __name__ == "__main__":
 
     if args.viz:
         print("Visualizing results for image {}, close to continue ...".format(fn))
-        plot_mask(to_uint8(cont_image), mask, True)
-        plot_mask(to_uint8(cont_image), true_mask, True)
+        plot_mask(to_uint8(cont_image), mask).show()
+        plot_mask(to_uint8(cont_image), true_mask).show()
 
     if not args.no_save:
         out_fn = "results/predicted.bmp"
-        result = plot_mask(to_uint8(cont_image), predicted_mask, False)
+        result = plot_mask(to_uint8(cont_image), predicted_mask)
         result.save(out_fn)
         print("Predicted mask saved to {}".format(out_fn))
 
         out_fn = "results/true_mask.bmp"
-        true_mask = plot_mask(to_uint8(cont_image), true_mask, False)
+        true_mask = plot_mask(to_uint8(cont_image), true_mask)
         true_mask.save(out_fn)
         print("True mask saved to {}".format(out_fn))

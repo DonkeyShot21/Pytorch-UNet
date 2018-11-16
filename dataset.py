@@ -62,6 +62,7 @@ class HelioDataset(Dataset):
         dpd = self.fenyi_sunspot.query(("year == @date.year & "
                                         "month == @date.month & "
                                         "day == @date.day"))
+        dpd = dpd[(dpd[['projected_umbra','projected_whole_spot']].T != 0).any()]
 
         time = datetime.strptime('-'.join([str(i) for i in list(dpd.iloc[0])[1:7]]), '%Y-%m-%d-%H-%M-%S')
         start_time = (time - timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')

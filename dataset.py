@@ -9,16 +9,18 @@ import sunpy.map
 from sunpy.time import parse_time
 
 from astropy.units import Quantity
+from astropy.io import fits
 from sunpy.map import Map
 
 import cv2, torch
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
-import os, math
+import os, math, heapq
 import numpy as np
 from torchvision.transforms import Compose
 
-from utils.load import search_VSO, normalize_map, remove_if_exists
+from utils.load import search_VSO, normalize_map
+from utils.load import remove_if_exists, inverse_normalize_map
 from utils.utils import slice, rotate_coord, keep_best
 
 import warnings
@@ -64,26 +66,38 @@ class HelioDataset(Dataset):
                                         "day == @date.day"))
         dpd = dpd[(dpd[['projected_umbra','projected_whole_spot']].T != 0).any()]
 
-        time = datetime.strptime('-'.join([str(i) for i in list(dpd.iloc[0])[1:7]]), '%Y-%m-%d-%H-%M-%S')
-        start_time = (time - timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')
-        end_time = (time + timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')
+        time = '-'.join([str(i) for i in list(dpd.iloc[0])[1:7]])
+        time = datetime.strptime(time, '%Y-%m-%d-%H-%M-%S')
 
-        try:
-            print("Searching VSO...")
-            continuum_file, magnetic_file = None, None
-            continuum_file, magnetic_file = search_VSO(start_time, end_time)
-            hmi_cont = Map(continuum_file)
-            hmi_mag = Map(magnetic_file)
-        except Exception as e:
-            print(e)
-            remove_if_exists(continuum_file)
-            remove_if_exists(magnetic_file)
-            return self.__getitem__(idx)
+        if time > datetime(2010,2,11,0,0): # SDO launch date
+            try:
+                print("Searching VSO...")
+                start_time = (time - timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')
+                end_time = (time + timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')
+                continuum_file, magnetic_file = None, None
+                continuum_file, magnetic_file = search_VSO(start_time, end_time)
+                hmi_cont = Map(continuum_file)
+                hmi_mag = Map(magnetic_file)
+            except Exception as e:
+                print(e)
+                remove_if_exists(continuum_file)
+                remove_if_exists(magnetic_file)
+                return self.__getitem__(idx)
+        else: #otherwise use SOHO
+            img_fns = {}
+            for kind in ['magnetic', 'intensity']:
+                dir = os.path.join('data/dpd/images', kind)
+                fns = os.listdir(dir)
+                img_fn = [i for i in fns if time.strftime('%Y%m%d') in i][0]
+                img_fn = os.path.join(dir, img_fn)
+                img_fns[kind] = img_fn
+            hmi_cont = Map(img_fns['intensity'])
+            hmi_mag = Map(img_fns['magnetic'])
 
         # get the data from the maps
-        img_cont = normalize_map(hmi_cont)
-        img_mag = 2 * normalize_map(hmi_mag) - 1
-        inputs = np.array([img_cont, img_mag])
+        img_cont = inverse_normalize_map(hmi_cont.data)
+        img_mag = normalize_map(hmi_mag.data)
+        inputs = [img_cont, img_mag]
 
         # get the coordinates and the date of the sunspots from DPD
         print("Creating mask...")
@@ -112,6 +126,8 @@ class HelioDataset(Dataset):
         disk_mask_num_px = len(disk_mask)
         whole_spot_mask = set()
 
+        print(sunspots)
+
         for i in range(len(sunspots)):
             o = 4 # offset
             p = sunspots[i]
@@ -136,7 +152,8 @@ class HelioDataset(Dataset):
                           for n in new}
                 for e in set(expand - whole_spot):
                     candidates[e] = img_cont[e]
-                new = sorted(candidates, key=candidates.get)[:expansion_rate]
+                new = heapq.nsmallest(expansion_rate, candidates.keys(), key=lambda k: img_cont[k])
+                #new = sorted(candidates, key=candidates.get)[:expansion_rate]
                 for n in new:
                     candidates.pop(n, None)
                 whole_spot.update(set(new))
@@ -146,13 +163,24 @@ class HelioDataset(Dataset):
         for c in set.intersection(whole_spot_mask, disk_mask):
             mask[c] = 1
 
+        mask = cv2.resize(mask, (4096,4096), interpolation=cv2.INTER_NEAREST)
+        for i in range(len(inputs)):
+            inputs[i] = cv2.resize(inputs[i], (4096,4096),
+                                   interpolation=cv2.INTER_AREA)
+            print(np.amax(inputs[i]), np.amin(inputs[i]))
+            Image.fromarray(255*inputs[i]).show()
+        inputs = np.array(inputs, dtype=np.float32)
+
+            # mag_patch = cv2.resize(mag_patch, (1024,1024),
+            #                 interpolation=cv2.INTER_AREA)
+            # mask_patch = cv2.resize(mask_patch, (1024,1024),
+            #                 interpolation=cv2.INTER_NEAREST)
+
         # show_mask(img_cont, mask)
-        remove_if_exists(continuum_file)
-        remove_if_exists(magnetic_file)
+        # remove_if_exists(continuum_file)
+        # remove_if_exists(magnetic_file)
 
         return {"img": inputs.astype(np.float32), "mask": mask}
-
-
 
 
 

@@ -9,7 +9,7 @@ from PIL import Image
 
 from unet import UNet
 from utils import resize_and_crop, normalize, split_img_into_squares, hwc_to_chw
-from utils import plot_img_and_mask, merge_masks, dense_crf
+from utils import plot_img_and_mask, merge_masks #, dense_crf
 from utils import slice, keep_best, plot_mask
 
 from torchvision import transforms
@@ -34,9 +34,9 @@ def predict_img(net,
         output_probs = F.sigmoid(output_imgs)
         output_probs = output_probs.cpu().numpy()
 
-    if use_dense_crf:
-        rgb = cv2.cvtColor(np.array(img[0][0] * 255, dtype=np.uint8),cv2.COLOR_GRAY2RGB)
-        output_probs = dense_crf(rgb, output_probs)
+    # if use_dense_crf:
+    #     rgb = cv2.cvtColor(np.array(img[0][0] * 255, dtype=np.uint8),cv2.COLOR_GRAY2RGB)
+    #     output_probs = dense_crf(rgb, output_probs)
 
     return output_probs > out_threshold
 
@@ -98,8 +98,8 @@ if __name__ == "__main__":
 
     print("Model loaded !")
 
-    dataset = HelioDataset('./data/SIDC_dataset.csv',
-                           'data/fenyi',
+    dataset = HelioDataset('./data/sidc/SIDC_dataset.csv',
+                           'data/dpd/sunspot_data',
                            1)
     data_loader = DataLoader(dataset)
 

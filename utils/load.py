@@ -3,6 +3,7 @@
 #           cropped images and masks
 
 import os
+import cv2
 
 import numpy as np
 from PIL import Image
@@ -36,12 +37,23 @@ def search_VSO(start_time, end_time):
     magnetic_file = results.wait()
     return continuum_file[0], magnetic_file[0]
 
-def normalize_map(map):
-    img = map.data
-    img[np.isnan(img)] = 0
-    img_min = np.amin(img)
-    img_max = np.amax(img)
-    return (img - img_min) / (img_max - img_min)
+def normalize_map(img):
+    background = np.zeros(img.shape, dtype=np.uint8)
+    background[img == img[0,0]] = 1
+    ret, labels, stats, centroids = cv2.connectedComponentsWithStats(background)
+    largest_component = 1 # opencv returns background component as label 0
+    img = img.astype(np.float64)
+    img_min = np.nanmin(img)
+    img_max = np.nanmax(img)
+    img = ((img - img_min) / (img_max - img_min)).astype(np.float32)
+    img[np.isnan(img)] = -1
+    img[labels == largest_component] = -1
+
+    return img
+
+
+def inverse_normalize_map(img):
+    return normalize_map(-1 * img)
 
 def remove_if_exists(file):
     if file != None:

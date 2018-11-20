@@ -31,7 +31,6 @@ def predict_img(net,
 
     with torch.no_grad():
         output_imgs = net(imgs)
-        output_probs = F.sigmoid(output_imgs)
         output_probs = output_probs.cpu().numpy()
 
     if use_dense_crf:

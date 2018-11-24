@@ -14,7 +14,7 @@ from sunpy.map import Map
 import cv2, torch
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
-import os, math
+import os, math, heapq
 import numpy as np
 from torchvision.transforms import Compose
 
@@ -127,7 +127,7 @@ class HelioDataset(Dataset):
 
             new = set([(p[1] - o + low[1][0], p[0] - o + low[0][0])])
             whole_spot = set()
-            candidates = dict()
+            candidates = set()
             expansion_rate = 3
             while len(whole_spot) < ss_num_px:
                 expand = {(n[0]+i,n[1]+j)
@@ -135,10 +135,10 @@ class HelioDataset(Dataset):
                           for j in [-1,0,1]
                           for n in new}
                 for e in set(expand - whole_spot):
-                    candidates[e] = img_cont[e]
-                new = sorted(candidates, key=candidates.get)[:expansion_rate]
+                    candidates.add(e)
+                new = heapq.nsmallest(expansion_rate, candidates, key=lambda k: img_cont[k])
                 for n in new:
-                    candidates.pop(n, None)
+                    candidates.remove(n)
                 whole_spot.update(set(new))
 
             whole_spot_mask.update(whole_spot)

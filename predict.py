@@ -9,7 +9,7 @@ from PIL import Image
 
 from unet import UNet
 from utils import resize_and_crop, normalize, split_img_into_squares, hwc_to_chw
-from utils import plot_img_and_mask, merge_masks, dense_crf
+from utils import plot_img_and_mask, merge_masks#, dense_crf
 from utils import slice, keep_best, plot_mask
 
 from torchvision import transforms
@@ -30,14 +30,13 @@ def predict_img(net,
         imgs = imgs.cuda()
 
     with torch.no_grad():
-        output_imgs = net(imgs)
-        output_probs = output_probs.cpu().numpy()
+        output = net(imgs).cpu().numpy()
 
-    if use_dense_crf:
-        rgb = cv2.cvtColor(np.array(img[0][0] * 255, dtype=np.uint8),cv2.COLOR_GRAY2RGB)
-        output_probs = dense_crf(rgb, output_probs)
+    # if use_dense_crf:
+    #     rgb = cv2.cvtColor(np.array(img[0][0] * 255, dtype=np.uint8),cv2.COLOR_GRAY2RGB)
+    #     output_probs = dense_crf(rgb, output_probs)
 
-    return output_probs > out_threshold
+    return output > out_threshold
 
 
 
@@ -97,17 +96,17 @@ if __name__ == "__main__":
 
     print("Model loaded !")
 
-    dataset = HelioDataset('./data/SIDC_dataset.csv',
-                           'data/fenyi',
+    dataset = HelioDataset('./data/sidc/SIDC_dataset.csv',
+                           'data/dpd/',
                            1)
     data_loader = DataLoader(dataset)
 
     pred_mask_slices = []
-    cont_image = None
+    input = None
     true_mask = None
 
     for _, obs in enumerate(data_loader):
-        cont_image = np.array(obs["img"][0][0])
+        input = np.array(obs["img"][0])
         true_mask = np.array(obs["mask"][0])
         obs = slice(obs, args.window, args.window)
         for idx in range(0, len(obs['imgs']), args.batch_size):
@@ -123,23 +122,23 @@ if __name__ == "__main__":
             pred_mask_slices.extend(masks.squeeze())
 
     pred_mask_slices = np.array(pred_mask_slices)
-    n = cont_image.shape[0] // args.window
+    n = input[0].shape[0] // args.window
     rows = [pred_mask_slices[i:i+n] for i in range(0,len(pred_mask_slices),n)]
     rows = np.array(rows)
     predicted_mask = np.vstack([np.hstack(a) for a in rows])
 
     if args.viz:
         print("Visualizing results for image {}, close to continue ...".format(fn))
-        plot_mask(to_uint8(cont_image), mask).show()
-        plot_mask(to_uint8(cont_image), true_mask).show()
+        plot_mask(to_uint8(input[0]), mask).show()
+        plot_mask(to_uint8(input[0]), true_mask).show()
 
     if not args.no_save:
         out_fn = "results/predicted.bmp"
-        result = plot_mask(to_uint8(cont_image), predicted_mask)
+        result = plot_mask(to_uint8(input[0]), predicted_mask)
         result.save(out_fn)
         print("Predicted mask saved to {}".format(out_fn))
 
         out_fn = "results/true_mask.bmp"
-        true_mask = plot_mask(to_uint8(cont_image), true_mask)
+        true_mask = plot_mask(to_uint8(input[0]), true_mask)
         true_mask.save(out_fn)
         print("True mask saved to {}".format(out_fn))

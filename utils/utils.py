@@ -42,6 +42,13 @@ def keep_best(obs, n):
     obs["masks"] = obs["masks"][indices]
     return obs
 
+def normalize_map(map):
+    img = map.data
+    img[np.isnan(img)] = 0
+    img_min = np.amin(img)
+    img_max = np.amax(img)
+    return (img - img_min) / (img_max - img_min)
+
 # ------------------------------------------------------------------------------
 
 

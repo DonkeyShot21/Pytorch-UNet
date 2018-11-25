@@ -36,13 +36,6 @@ def search_VSO(start_time, end_time):
     magnetic_file = results.wait()
     return continuum_file[0], magnetic_file[0]
 
-def normalize_map(map):
-    img = map.data
-    img[np.isnan(img)] = 0
-    img_min = np.amin(img)
-    img_max = np.amax(img)
-    return (img - img_min) / (img_max - img_min)
-
 def remove_if_exists(file):
     if file != None:
         if os.path.exists(file):

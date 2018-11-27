@@ -10,7 +10,7 @@ from PIL import Image
 from unet import UNet
 from utils import resize_and_crop, normalize, split_img_into_squares, hwc_to_chw
 from utils import plot_img_and_mask, merge_masks#, dense_crf
-from utils import slice, keep_best, plot_mask
+from utils import slice, keep_best, plot_mask, to_uint8
 
 from torchvision import transforms
 
@@ -72,11 +72,6 @@ def get_args():
 
     return parser.parse_args()
 
-def to_image(img):
-    return Image.fromarray((img * 255).astype(np.uint8))
-
-def to_uint8(img):
-    return np.array(img * 255, dtype=np.uint8)
 
 if __name__ == "__main__":
     args = get_args()
@@ -106,12 +101,12 @@ if __name__ == "__main__":
     true_mask = None
 
     for _, obs in enumerate(data_loader):
-        input = np.array(obs["img"][0])
+        input = np.array(obs["inputs"][0])
         true_mask = np.array(obs["mask"][0])
         obs = slice(obs, args.window, args.window)
-        for idx in range(0, len(obs['imgs']), args.batch_size):
+        for idx in range(0, len(obs['inputs']), args.batch_size):
             print("\nPredicting images {0} - {1} ...".format(idx, idx+args.batch_size))
-            imgs = obs['imgs'][idx:idx+args.batch_size].float()
+            imgs = obs['inputs'][idx:idx+args.batch_size].float()
 
             masks = predict_img(net=net,
                                 imgs=imgs,

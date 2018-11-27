@@ -49,6 +49,9 @@ def normalize_map(map):
     img_max = np.amax(img)
     return (img - img_min) / (img_max - img_min)
 
+def to_uint8(img):
+    return np.array(img * 255, dtype=np.uint8)
+
 # ------------------------------------------------------------------------------
 
 

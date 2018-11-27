@@ -22,7 +22,7 @@ from utils.utils import keep_best, slice
 def train_net(net,
               epochs=5,
               batch_size=1,
-              lr=0.1,
+              lr=0.01,
               val_percent=0.05,
               save_cp=True,
               gpu=False,
@@ -60,9 +60,9 @@ def train_net(net,
         for _, obs in enumerate(data_loader):
             obs = keep_best(slice(obs, window, window // 2), obs_size)
 
-            for idx in range(0, len(obs['imgs']), batch_size):
-                imgs = obs['imgs'][idx:idx+batch_size].float()
-                true_masks = obs['masks'][idx:idx+batch_size].float()
+            for idx in range(0, len(obs['inputs']), batch_size):
+                imgs = obs['inputs'][idx:idx+batch_size].float()
+                true_masks = obs['mask'][idx:idx+batch_size].float()
 
                 if gpu:
                     imgs = imgs.cuda()
@@ -100,7 +100,7 @@ def get_args():
                       help='number of epochs')
     parser.add_option('-b', '--batch-size', dest='batch', default=5,
                       type='int', help='batch ')
-    parser.add_option('-l', '--learning-rate', dest='lr', default=0.1,
+    parser.add_option('-l', '--learning-rate', dest='lr', default=0.01,
                       type='float', help='learning rate')
     parser.add_option('-g', '--gpu', action='store_true', dest='gpu',
                       default=False, help='use cuda')

@@ -18,8 +18,8 @@ import os, math, heapq
 import numpy as np
 from torchvision.transforms import Compose
 
-from utils.load import search_VSO, normalize_map, remove_if_exists
-from utils.utils import slice, rotate_coord, keep_best
+from utils.load import search_VSO, remove_if_exists
+from utils.utils import slice, rotate_coord, keep_best, normalize_map
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -76,9 +76,10 @@ class HelioDataset(Dataset):
             hmi_mag = Map(magnetic_file)
         except Exception as e:
             print(e)
+            return self.__getitem__(idx)
+        finally:
             remove_if_exists(continuum_file)
             remove_if_exists(magnetic_file)
-            return self.__getitem__(idx)
 
         # get the data from the maps
         img_cont = normalize_map(hmi_cont)
@@ -92,7 +93,9 @@ class HelioDataset(Dataset):
         sunspots = rotate_coord(hmi_cont, ss_coord, ss_date)
 
         # mask = (255 * img_cont).astype(np.uint8)
+        instances = np.zeros(img_cont.shape, dtype=np.float32)
         mask = np.zeros(img_cont.shape, dtype=np.float32)
+
 
         ws = dpd[['projected_whole_spot',
                   'group_number',
@@ -110,14 +113,14 @@ class HelioDataset(Dataset):
         disk_mask = np.where(255*img_cont > 10)
         disk_mask = {(c[0],c[1]) for c in np.column_stack(disk_mask)}
         disk_mask_num_px = len(disk_mask)
-        whole_spot_mask = set()
 
         for i in range(len(sunspots)):
             o = 4 # offset
             p = sunspots[i]
-            # g_number = groups.index(ws.iloc[i]['group_number'])
-            group = img_cont[int(p[1])-o:int(p[1])+o,int(p[0])-o:int(p[0])+o]
-            low = np.where(group == np.amin(group))
+
+            group_idx = groups.index(ws.iloc[i]['group_number'])
+            patch = img_cont[int(p[1])-o:int(p[1])+o,int(p[0])-o:int(p[0])+o]
+            low = np.where(patch == np.amin(patch))
 
             center = (img_cont.shape[0] / 2, img_cont.shape[1] / 2)
             distance = np.linalg.norm(tuple(j-k for j,k in zip(center,p)))
@@ -141,16 +144,13 @@ class HelioDataset(Dataset):
                     candidates.remove(n)
                 whole_spot.update(set(new))
 
-            whole_spot_mask.update(whole_spot)
+            for c in set.intersection(whole_spot, disk_mask):
+                instances[c] = group_idx
+                mask[c] = 1
 
-        for c in set.intersection(whole_spot_mask, disk_mask):
-            mask[c] = 1
-
-        # show_mask(img_cont, mask)
-        remove_if_exists(continuum_file)
-        remove_if_exists(magnetic_file)
-
-        return {"img": inputs.astype(np.float32), "mask": mask}
+        return {"inputs": inputs.astype(np.float32),
+                "mask": mask,
+                "instances": instances}
 
 
 

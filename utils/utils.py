@@ -20,33 +20,38 @@ def rotate_coord(map, coord, date):
     return [(int(px.x[i].value),int(px.y[i].value)) for i in range(len(px.x))]
 
 def slice(obs, window, stride):
-    cont = obs["img"][0][0]
-    mag = obs["img"][0][1]
+    cont = obs["inputs"][0][0]
+    mag = obs["inputs"][0][1]
     mask = obs["mask"][0]
-    slices = {'imgs': [], 'masks': []}
+    slices = {'inputs': [], 'masks': []}
     for x in range(0, cont.shape[0]-window+1, stride):
         for y in range(0, cont.shape[1]-window+1, stride):
             mask_patch = mask[x:x+window,y:y+window]
             cont_patch = cont[x:x+window,y:y+window]
             mag_patch = mag[x:x+window,y:y+window]
-            slices['imgs'].append(torch.stack([cont_patch, mag_patch]))
+            slices['inputs'].append(torch.stack([cont_patch, mag_patch]))
             slices['masks'].append(torch.stack([mask_patch]))
-    slices["imgs"] = torch.stack(slices["imgs"])
+    slices["inputs"] = torch.stack(slices["inputs"])
     slices["masks"] = torch.stack(slices["masks"])
     return slices
 
 def keep_best(obs, n):
     counts = [np.count_nonzero(m) for m in obs["masks"]]
     indices = np.argpartition(counts, -n)[-n:]
-    obs["imgs"] = obs["imgs"][indices]
+    obs["inputs"] = obs["inputs"][indices]
     obs["masks"] = obs["masks"][indices]
     return obs
 
 def normalize_map(map):
     img = map.data
+    return normalize_img(img)
+
+def normalize_img(img):
     img[np.isnan(img)] = 0
     img_min = np.amin(img)
+    print(img_min)
     img_max = np.amax(img)
+    print(img_max)
     return (img - img_min) / (img_max - img_min)
 
 def to_uint8(img):

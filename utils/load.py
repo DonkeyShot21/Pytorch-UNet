@@ -13,28 +13,42 @@ from sunpy.net.vso import VSOClient
 
 # FENNEC'S loading functions
 
-def search_VSO(start_time, end_time):
+
+def search_VSO(start_time, end_time, physobs='intensity'):
     client = VSOClient()
     query_response = client.query_legacy(tstart=start_time,
                                          tend=end_time,
                                          instrument='HMI',
-                                         physobs='intensity',
+                                         physobs=physobs,
                                          sample=3600)
     results = client.fetch(query_response[:1],
                            path='./tmp/{file}',
                            site='rob')
-    continuum_file = results.wait()
+    file = results.wait()
+    return file[0]
 
-    query_response = client.query_legacy(tstart=start_time,
-                                         tend=end_time,
-                                         instrument='HMI',
-                                         physobs='los_magnetic_field',
-                                         sample=3600)
-    results = client.fetch(query_response[:1],
-                           path='./tmp/{file}',
-                           site='rob')
-    magnetic_file = results.wait()
-    return continuum_file[0], magnetic_file[0]
+# def search_VSO(start_time, end_time):
+#     client = VSOClient()
+#     query_response = client.query_legacy(tstart=start_time,
+#                                          tend=end_time,
+#                                          instrument='HMI',
+#                                          physobs='intensity',
+#                                          sample=3600)
+#     results = client.fetch(query_response[:1],
+#                            path='./tmp/{file}',
+#                            site='rob')
+#     continuum_file = results.wait()
+#
+#     query_response = client.query_legacy(tstart=start_time,
+#                                          tend=end_time,
+#                                          instrument='HMI',
+#                                          physobs='los_magnetic_field',
+#                                          sample=3600)
+#     results = client.fetch(query_response[:1],
+#                            path='./tmp/{file}',
+#                            site='rob')
+#     magnetic_file = results.wait()
+#     return continuum_file[0], magnetic_file[0]
 
 def remove_if_exists(file):
     if file != None:

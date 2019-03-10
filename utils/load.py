@@ -14,7 +14,7 @@ from sunpy.net.vso import VSOClient
 # FENNEC'S loading functions
 
 
-def search_VSO(start_time, end_time, physobs='intensity'):
+def search_VSO(start_time, end_time, dir, physobs='intensity'):
     client = VSOClient()
     query_response = client.query_legacy(tstart=start_time,
                                          tend=end_time,
@@ -22,7 +22,7 @@ def search_VSO(start_time, end_time, physobs='intensity'):
                                          physobs=physobs,
                                          sample=3600)
     results = client.fetch(query_response[:1],
-                           path='./tmp/{file}',
+                           path=os.path.join(dir,'{file}'),
                            site='rob')
     file = results.wait()
     return file[0]

@@ -50,10 +50,10 @@ def create_dataset_SDO(SIDC_filename, fenyi_dir):
 
 
     for index, row in sidc_csv.iterrows():
-        create_image_SDO(sidc_csv, fenyi_sunspot)
+        create_image_SDO(row, fenyi_sunspot)
 
 
-def create_image_SDO(sidc_csv, fenyi_sunspot):
+def create_image_SDO(row, fenyi_sunspot):
     row = row.to_frame().transpose()
 
     # sampling with probability from SIDC
@@ -84,47 +84,52 @@ def create_image_SDO(sidc_csv, fenyi_sunspot):
     groups = list(ws['group_number'].unique())
     time = datetime.strptime('-'.join([str(i) for i in list(dpd.iloc[0])[1:7]]), '%Y-%m-%d-%H-%M-%S')
 
-
     # SDO
+
+    dir = 'homeRAID/efini/dataset/SDO/images'
+    dir_out = 'homeRAID/efini/dataset/SDO/products'
+    dir_mask_out = 'homeRAID/efini/dataset/SDO/masks'
+
 
     start_time = (time - timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')
     end_time = (time + timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')
 
     try:
         print("Searching VSO...")
-        continuum_file = search_VSO(start_time, end_time)
-        hmi_cont = Map(continuum_file)
+        file = search_VSO(start_time, end_time, dir)
+        print(file)
+        hmi = Map(file)
     except Exception as e:
         print(e)
+        return
 
     # get the data from the maps
-    img_cont = normalize_map(hmi_cont)
+    img = normalize_map(hmi)
 
     # get the coordinates and the date of the sunspots from DPD
     print("Creating mask...")
     ss_coord = dpd[['heliographic_latitude', 'heliographic_longitude']]
     ss_date = parse_time(time)
-    sunspots = rotate_coord(hmi_cont, ss_coord, ss_date)
+    sunspots = rotate_coord(hmi, ss_coord, ss_date)
 
     # mask = (255 * img_cont).astype(np.uint8)
-    instances = np.zeros(img_cont.shape, dtype=np.float32)
-    mask = np.zeros(img_cont.shape, dtype=np.float32)
+    instances = np.zeros(img.shape, dtype=np.float32)
+    mask = np.zeros(img.shape, dtype=np.float32)
 
-
-
-    disk_mask = np.where(255*img_cont > 10)
+    disk_mask = np.where(255*img > 10)
     disk_mask = {(c[0],c[1]) for c in np.column_stack(disk_mask)}
     disk_mask_num_px = len(disk_mask)
 
     for i in range(len(sunspots)):
+        print(i, len(sunspots))
         o = 4 # offset
         p = sunspots[i]
 
         group_idx = groups.index(ws.iloc[i]['group_number'])
-        patch = img_cont[int(p[1])-o:int(p[1])+o,int(p[0])-o:int(p[0])+o]
+        patch = img[int(p[1])-o:int(p[1])+o,int(p[0])-o:int(p[0])+o]
         low = np.where(patch == np.amin(patch))
 
-        center = (img_cont.shape[0] / 2, img_cont.shape[1] / 2)
+        center = (img.shape[0] / 2, img.shape[1] / 2)
         distance = np.linalg.norm(tuple(j-k for j,k in zip(center,p)))
         cosine_amplifier = math.cos(math.radians(1) * distance / center[0])
         norm_num_px = cosine_amplifier * ws.iloc[i]['projected_whole_spot']
@@ -141,13 +146,36 @@ def create_image_SDO(sidc_csv, fenyi_sunspot):
                       for n in new}
             for e in set(expand - whole_spot):
                 candidates.add(e)
-            new = heapq.nsmallest(expansion_rate, candidates, key=lambda k: img_cont[k])
+            new = heapq.nsmallest(expansion_rate, candidates, key=lambda k: img[k])
             for n in new:
                 candidates.remove(n)
             whole_spot.update(set(new))
 
         for c in set.intersection(whole_spot, disk_mask):
             instances[c] = 255 - group_idx
+
+
+    x, y = [c[0] for c in disk_mask], [c[1] for c in disk_mask]
+
+    minx, maxx, miny, maxy = np.amin(x), np.amax(x), np.amin(y), np.amax(y)
+
+    print(minx, maxx, miny, maxy)
+
+    top_left, bottom_right = (minx, miny), (maxx, maxy)
+
+    img = img[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
+    img = cv2.resize(img, (4000, 4000))
+
+    instances = instances[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
+    instances = cv2.resize(instances, (4000, 4000))
+
+    out_filename = file.split('.')[0].split('\\')[-1]
+
+    cv2.imwrite(os.path.join(dir_out,out_filename+'.png'), ((img*2**16) -1).astype(np.uint16))
+    Image.fromarray(instances.astype(np.uint8)).save(os.path.join(dir_mask_out,out_filename+'_mask.png'))
+
+
+
 
 
 

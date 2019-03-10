@@ -47,102 +47,105 @@ def create_dataset_SDO(SIDC_filename, fenyi_dir):
 
 
     for index, row in sidc_csv.iterrows():
-
-        row = row.to_frame().transpose()
-
-        # sampling with probability from SIDC
-        print("Sampling from SIDC...")
-        #row = sidc_csv.sample(weights=sidc_csv[4])
-        day = '/'.join(map(str, row.iloc[0][:-1]))
-        date = datetime.strptime(day + ' 12:00:00', '%Y/%m/%d %H:%M:%S')
-
-        # loading sunspot data from DPD
-        print("Loading sunspot data...", date)
-        dpd = fenyi_sunspot.query(("year == @date.year & "
-                                   "month == @date.month & "
-                                   "day == @date.day"))
-        dpd = dpd[(dpd[['projected_umbra',
-                        'projected_whole_spot']].T != 0).any()]
-
-        ws = dpd[['projected_whole_spot', 'group_number', 'group_spot_number']]
-        rp = dpd[['position_angle', 'center_distance']]
-
-        for index, row in ws.iterrows():
-            wsa = row['projected_whole_spot']
-            if wsa < 0:
-                match = ws.query(("group_number == @row.group_number & "
-                                  "group_spot_number == -@wsa"))
-                area = match['projected_whole_spot'].iloc[0]
-                ws.loc[row.name,'projected_whole_spot'] = area
-
-        groups = list(ws['group_number'].unique())
-        time = datetime.strptime('-'.join([str(i) for i in list(dpd.iloc[0])[1:7]]), '%Y-%m-%d-%H-%M-%S')
+        create_image_SDO(sidc_csv, fenyi_sunspot)
 
 
-        # # SDO
-        #
-        # start_time = (time - timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')
-        # end_time = (time + timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')
-        #
-        # try:
-        #     print("Searching VSO...")
-        #     continuum_file = search_VSO(start_time, end_time)
-        #     hmi_cont = Map(continuum_file)
-        # except Exception as e:
-        #     print(e)
-        #
-        # # get the data from the maps
-        # img_cont = normalize_map(hmi_cont)
-        #
-        # # get the coordinates and the date of the sunspots from DPD
-        # print("Creating mask...")
-        # ss_coord = dpd[['heliographic_latitude', 'heliographic_longitude']]
-        # ss_date = parse_time(time)
-        # sunspots = rotate_coord(hmi_cont, ss_coord, ss_date)
-        #
-        # # mask = (255 * img_cont).astype(np.uint8)
-        # instances = np.zeros(img_cont.shape, dtype=np.float32)
-        # mask = np.zeros(img_cont.shape, dtype=np.float32)
-        #
-        #
-        #
-        # disk_mask = np.where(255*img_cont > 10)
-        # disk_mask = {(c[0],c[1]) for c in np.column_stack(disk_mask)}
-        # disk_mask_num_px = len(disk_mask)
-        #
-        # for i in range(len(sunspots)):
-        #     o = 4 # offset
-        #     p = sunspots[i]
-        #
-        #     group_idx = groups.index(ws.iloc[i]['group_number'])
-        #     patch = img_cont[int(p[1])-o:int(p[1])+o,int(p[0])-o:int(p[0])+o]
-        #     low = np.where(patch == np.amin(patch))
-        #
-        #     center = (img_cont.shape[0] / 2, img_cont.shape[1] / 2)
-        #     distance = np.linalg.norm(tuple(j-k for j,k in zip(center,p)))
-        #     cosine_amplifier = math.cos(math.radians(1) * distance / center[0])
-        #     norm_num_px = cosine_amplifier * ws.iloc[i]['projected_whole_spot']
-        #     ss_num_px = 8.6 * norm_num_px * disk_mask_num_px / 10e6
-        #
-        #     new = set([(p[1] - o + low[1][0], p[0] - o + low[0][0])])
-        #     whole_spot = set()
-        #     candidates = set()
-        #     expansion_rate = 3
-        #     while len(whole_spot) < ss_num_px:
-        #         expand = {(n[0]+i,n[1]+j)
-        #                   for i in [-1,0,1]
-        #                   for j in [-1,0,1]
-        #                   for n in new}
-        #         for e in set(expand - whole_spot):
-        #             candidates.add(e)
-        #         new = heapq.nsmallest(expansion_rate, candidates, key=lambda k: img_cont[k])
-        #         for n in new:
-        #             candidates.remove(n)
-        #         whole_spot.update(set(new))
-        #
-        #     for c in set.intersection(whole_spot, disk_mask):
-        #         instances[c] = 255 - group_idx
-        #         mask[c] = 1
+def create_image_SDO(sidc_csv, fenyi_sunspot):
+    row = row.to_frame().transpose()
+
+    # sampling with probability from SIDC
+    print("Sampling from SIDC...")
+    #row = sidc_csv.sample(weights=sidc_csv[4])
+    day = '/'.join(map(str, row.iloc[0][:-1]))
+    date = datetime.strptime(day + ' 12:00:00', '%Y/%m/%d %H:%M:%S')
+
+    # loading sunspot data from DPD
+    print("Loading sunspot data...", date)
+    dpd = fenyi_sunspot.query(("year == @date.year & "
+                               "month == @date.month & "
+                               "day == @date.day"))
+    dpd = dpd[(dpd[['projected_umbra',
+                    'projected_whole_spot']].T != 0).any()]
+
+    ws = dpd[['projected_whole_spot', 'group_number', 'group_spot_number']]
+    rp = dpd[['position_angle', 'center_distance']]
+
+    for index, row in ws.iterrows():
+        wsa = row['projected_whole_spot']
+        if wsa < 0:
+            match = ws.query(("group_number == @row.group_number & "
+                              "group_spot_number == -@wsa"))
+            area = match['projected_whole_spot'].iloc[0]
+            ws.loc[row.name,'projected_whole_spot'] = area
+
+    groups = list(ws['group_number'].unique())
+    time = datetime.strptime('-'.join([str(i) for i in list(dpd.iloc[0])[1:7]]), '%Y-%m-%d-%H-%M-%S')
+
+
+    # SDO
+
+    start_time = (time - timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')
+    end_time = (time + timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')
+
+    try:
+        print("Searching VSO...")
+        continuum_file = search_VSO(start_time, end_time)
+        hmi_cont = Map(continuum_file)
+    except Exception as e:
+        print(e)
+
+    # get the data from the maps
+    img_cont = normalize_map(hmi_cont)
+
+    # get the coordinates and the date of the sunspots from DPD
+    print("Creating mask...")
+    ss_coord = dpd[['heliographic_latitude', 'heliographic_longitude']]
+    ss_date = parse_time(time)
+    sunspots = rotate_coord(hmi_cont, ss_coord, ss_date)
+
+    # mask = (255 * img_cont).astype(np.uint8)
+    instances = np.zeros(img_cont.shape, dtype=np.float32)
+    mask = np.zeros(img_cont.shape, dtype=np.float32)
+
+
+
+    disk_mask = np.where(255*img_cont > 10)
+    disk_mask = {(c[0],c[1]) for c in np.column_stack(disk_mask)}
+    disk_mask_num_px = len(disk_mask)
+
+    for i in range(len(sunspots)):
+        o = 4 # offset
+        p = sunspots[i]
+
+        group_idx = groups.index(ws.iloc[i]['group_number'])
+        patch = img_cont[int(p[1])-o:int(p[1])+o,int(p[0])-o:int(p[0])+o]
+        low = np.where(patch == np.amin(patch))
+
+        center = (img_cont.shape[0] / 2, img_cont.shape[1] / 2)
+        distance = np.linalg.norm(tuple(j-k for j,k in zip(center,p)))
+        cosine_amplifier = math.cos(math.radians(1) * distance / center[0])
+        norm_num_px = cosine_amplifier * ws.iloc[i]['projected_whole_spot']
+        ss_num_px = 8.6 * norm_num_px * disk_mask_num_px / 10e6
+
+        new = set([(p[1] - o + low[1][0], p[0] - o + low[0][0])])
+        whole_spot = set()
+        candidates = set()
+        expansion_rate = 3
+        while len(whole_spot) < ss_num_px:
+            expand = {(n[0]+i,n[1]+j)
+                      for i in [-1,0,1]
+                      for j in [-1,0,1]
+                      for n in new}
+            for e in set(expand - whole_spot):
+                candidates.add(e)
+            new = heapq.nsmallest(expansion_rate, candidates, key=lambda k: img_cont[k])
+            for n in new:
+                candidates.remove(n)
+            whole_spot.update(set(new))
+
+        for c in set.intersection(whole_spot, disk_mask):
+            instances[c] = 255 - group_idx
+
 
 
 def create_dataset_ground(SIDC_filename, fenyi_dir):
@@ -162,7 +165,7 @@ def create_dataset_ground(SIDC_filename, fenyi_dir):
     sidc_csv = sidc_csv[sidc_csv[0].isin(years)]
 
 
-    for index, row in sidc_csv.iloc[1:].iterrows():
+    for index, row in sidc_csv.iloc[2:].iterrows():
         create_image_ground(row, fenyi_sunspot)
 
 
@@ -201,9 +204,9 @@ def create_image_ground(row, fenyi_sunspot):
     groups = list(ws['group_number'].unique())
     time = datetime.strptime('-'.join([str(i) for i in list(dpd.iloc[0])[1:7]]), '%Y-%m-%d-%H-%M-%S')
 
-    dir = '/homeRAID/efini/dataset/ground/images'
-    dir_out = '/homeRAID/efini/dataset/ground/product'
-    dir_mask_out = '/homeRAID/efini/dataset/ground/masks'
+    dir = 'tmp/ground'
+    dir_out = 'tmp'
+    dir_mask_out = 'tmp'
 
     files = os.listdir(dir)
     file = [os.path.join(dir,f) for f in files if time.strftime('%Y%m%d') in f][0]
@@ -212,7 +215,11 @@ def create_image_ground(row, fenyi_sunspot):
         img = np.flip(-hdul[0].data.astype(np.float64),0)
         center = (int(hdul[0].header['CENT_C']), int(hdul[0].header['CENT_R']))
         radius = int(hdul[0].header['R_SUN'])
-        tilt = -hdul[0].header['P']
+        if hdul[0].header['TELESCOP'] == 'Kanzelhoehe':
+            tilt = -hdul[0].header['PS']
+        else:
+            tilt = -hdul[0].header['P']
+
 
     min = np.amin(img)
     range = np.amax(img) - min
@@ -267,25 +274,21 @@ def create_image_ground(row, fenyi_sunspot):
             instances[c] = 255 - group_idx
 
 
-    half_img = int(radius*1.0341)
+    half_img = int(radius)
 
     top_left = (center[1]-half_img, center[0]-half_img)
     bottom_right =  (center[1]+half_img, center[0]+half_img)
 
     img = img[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
-    img = cv2.resize(img, (4096, 4096))
+    img = cv2.resize(img, (4000, 4000))
 
     instances = instances[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
-    instances = cv2.resize(instances, (4096, 4096))
+    instances = cv2.resize(instances, (4000, 4000))
 
-    out_filename = file.split('.')[0].split('/')[-1]
+    out_filename = file.split('.')[0].split('\\')[-1]
 
     cv2.imwrite(os.path.join(dir_out,out_filename+'.png'), ((img*2**16) -1).astype(np.uint16))
     Image.fromarray(instances.astype(np.uint8)).save(os.path.join(dir_mask_out,out_filename+'_mask.png'))
-
-
-
-
 
 
 

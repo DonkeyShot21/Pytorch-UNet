@@ -169,9 +169,9 @@ def create_image_SDO(row, fenyi_sunspot):
     instances = instances[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
     instances = cv2.resize(instances, (4000, 4000))
 
-    out_filename = file.split('.')[0].split('\\')[-1]
+    out_filename = file.split('.')[0].split('/')[-1]
 
-    cv2.imwrite(os.path.join(dir_out,out_filename+'.png'), ((img*2**16) -1).astype(np.uint16))
+    cv2.imwrite(os.path.join(dir_out,out_filename+'.png'), (img*(2**16 -1)).astype(np.uint16))
     Image.fromarray(instances.astype(np.uint8)).save(os.path.join(dir_mask_out,out_filename+'_mask.png'))
 
 
@@ -279,13 +279,13 @@ def create_image_ground(row, fenyi_sunspot):
         p = coord
 
         group_idx = groups.index(ws.loc[i]['group_number'])
-        patch = img[p[0]-o:p[0]+o,p[1]-o:p[1]+o]
+        patch = img[p[1]-o:p[1]+o,p[0]-o:p[0]+o]
         low = np.where(patch == np.amin(patch))
 
         distance = np.linalg.norm(tuple(j-k for j,k in zip(center,p)))
-        cosine_amplifier = math.cos(math.radians(1) * distance / center[0])
+        cosine_amplifier = math.cos(math.radians(1) * distance / radius)
         norm_num_px = cosine_amplifier * ws.loc[i]['projected_whole_spot']
-        ss_num_px = 8.8 * norm_num_px * disk_mask_num_px / 10e6
+        ss_num_px = 8.6 * norm_num_px * disk_mask_num_px / 10e6
 
         new = set([(p[1] - o + low[1][0], p[0] - o + low[0][0])])
         whole_spot = set()
@@ -318,9 +318,9 @@ def create_image_ground(row, fenyi_sunspot):
     instances = instances[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
     instances = cv2.resize(instances, (4000, 4000))
 
-    out_filename = file.split('.')[0].split('\\')[-1]
+    out_filename = file.split('.')[0].split('/')[-1]
 
-    cv2.imwrite(os.path.join(dir_out,out_filename+'.png'), ((img*2**16) -1).astype(np.uint16))
+    cv2.imwrite(os.path.join(dir_out,out_filename+'.png'), (img*(2**16-1)).astype(np.uint16))
     Image.fromarray(instances.astype(np.uint8)).save(os.path.join(dir_mask_out,out_filename+'_mask.png'))
 
 

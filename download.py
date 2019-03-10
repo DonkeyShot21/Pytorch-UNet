@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 from __future__ import print_function, division
 from datetime import datetime
 from datetime import timedelta
@@ -165,7 +168,7 @@ def create_dataset_ground(SIDC_filename, fenyi_dir):
     sidc_csv = sidc_csv[sidc_csv[0].isin(years)]
 
 
-    for index, row in sidc_csv.iloc[2:].iterrows():
+    for index, row in sidc_csv.iterrows():
         create_image_ground(row, fenyi_sunspot)
 
 
@@ -204,12 +207,15 @@ def create_image_ground(row, fenyi_sunspot):
     groups = list(ws['group_number'].unique())
     time = datetime.strptime('-'.join([str(i) for i in list(dpd.iloc[0])[1:7]]), '%Y-%m-%d-%H-%M-%S')
 
-    dir = 'tmp/ground'
-    dir_out = 'tmp'
-    dir_mask_out = 'tmp'
+    dir = '/homeRAID/efini/dataset/ground/images'
+    dir_out = '/homeRAID/efini/dataset/ground/products'
+    dir_mask_out = '/homeRAID/efini/dataset/ground/masks'
 
     files = os.listdir(dir)
     file = [os.path.join(dir,f) for f in files if time.strftime('%Y%m%d') in f][0]
+    if file.split('/')[-1].split('.')[0]+'.png' in os.listdir(dir_out):
+        return
+    print(file)
     with fits.open(file, ignore_missing_end=True) as hdul:
         # hdul.info()
         img = np.flip(-hdul[0].data.astype(np.float64),0)
@@ -219,7 +225,6 @@ def create_image_ground(row, fenyi_sunspot):
             tilt = -hdul[0].header['PS']
         else:
             tilt = -hdul[0].header['P']
-
 
     min = np.amin(img)
     range = np.amax(img) - min

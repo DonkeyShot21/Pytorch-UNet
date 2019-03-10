@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*- 
+
 from __future__ import print_function, division
 from datetime import datetime
 from datetime import timedelta
@@ -162,7 +165,7 @@ def create_dataset_ground(SIDC_filename, fenyi_dir):
     sidc_csv = sidc_csv[sidc_csv[0].isin(years)]
 
 
-    for index, row in sidc_csv.iloc[1:].iterrows():
+    for index, row in sidc_csv.iterrows():
         create_image_ground(row, fenyi_sunspot)
 
 
@@ -202,17 +205,23 @@ def create_image_ground(row, fenyi_sunspot):
     time = datetime.strptime('-'.join([str(i) for i in list(dpd.iloc[0])[1:7]]), '%Y-%m-%d-%H-%M-%S')
 
     dir = '/homeRAID/efini/dataset/ground/images'
-    dir_out = '/homeRAID/efini/dataset/ground/product'
+    dir_out = '/homeRAID/efini/dataset/ground/products'
     dir_mask_out = '/homeRAID/efini/dataset/ground/masks'
 
     files = os.listdir(dir)
     file = [os.path.join(dir,f) for f in files if time.strftime('%Y%m%d') in f][0]
+    if file.split('/')[-1].split('.')[0]+'.png' in os.listdir(dir_out):
+        return
+    print(file)
     with fits.open(file, ignore_missing_end=True) as hdul:
         # hdul.info()
         img = np.flip(-hdul[0].data.astype(np.float64),0)
         center = (int(hdul[0].header['CENT_C']), int(hdul[0].header['CENT_R']))
         radius = int(hdul[0].header['R_SUN'])
-        tilt = -hdul[0].header['P']
+        if hdul[0].header['TELESCOP'] == 'Kanzelhoehe':
+            tilt = -hdul[0].header['PS']
+        else:
+            tilt = -hdul[0].header['P']
 
     min = np.amin(img)
     range = np.amax(img) - min
@@ -267,16 +276,16 @@ def create_image_ground(row, fenyi_sunspot):
             instances[c] = 255 - group_idx
 
 
-    half_img = int(radius*1.0341)
+    half_img = int(radius)
 
     top_left = (center[1]-half_img, center[0]-half_img)
     bottom_right =  (center[1]+half_img, center[0]+half_img)
 
     img = img[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
-    img = cv2.resize(img, (4096, 4096))
+    img = cv2.resize(img, (4000, 4000))
 
     instances = instances[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
-    instances = cv2.resize(instances, (4096, 4096))
+    instances = cv2.resize(instances, (4000, 4000))
 
     out_filename = file.split('.')[0].split('/')[-1]
 

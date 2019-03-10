@@ -86,9 +86,9 @@ def create_image_SDO(row, fenyi_sunspot):
 
     # SDO
 
-    dir = 'homeRAID/efini/dataset/SDO/images'
-    dir_out = 'homeRAID/efini/dataset/SDO/products'
-    dir_mask_out = 'homeRAID/efini/dataset/SDO/masks'
+    dir = '/homeRAID/efini/dataset/SDO/images'
+    dir_out = '/homeRAID/efini/dataset/SDO/products'
+    dir_mask_out = '/homeRAID/efini/dataset/SDO/masks'
 
 
     start_time = (time - timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')
@@ -121,7 +121,6 @@ def create_image_SDO(row, fenyi_sunspot):
     disk_mask_num_px = len(disk_mask)
 
     for i in range(len(sunspots)):
-        print(i, len(sunspots))
         o = 4 # offset
         p = sunspots[i]
 
@@ -159,8 +158,6 @@ def create_image_SDO(row, fenyi_sunspot):
 
     minx, maxx, miny, maxy = np.amin(x), np.amax(x), np.amin(y), np.amax(y)
 
-    print(minx, maxx, miny, maxy)
-
     top_left, bottom_right = (minx, miny), (maxx, maxy)
 
     img = img[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
@@ -169,9 +166,9 @@ def create_image_SDO(row, fenyi_sunspot):
     instances = instances[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
     instances = cv2.resize(instances, (4000, 4000))
 
-    out_filename = file.split('.')[0].split('\\')[-1]
+    out_filename = file.split('.')[0].split('/')[-1]
 
-    cv2.imwrite(os.path.join(dir_out,out_filename+'.png'), ((img*2**16) -1).astype(np.uint16))
+    cv2.imwrite(os.path.join(dir_out,out_filename+'.png'), (img*(2**16 -1)).astype(np.uint16))
     Image.fromarray(instances.astype(np.uint8)).save(os.path.join(dir_mask_out,out_filename+'_mask.png'))
 
 
@@ -240,7 +237,12 @@ def create_image_ground(row, fenyi_sunspot):
     dir_mask_out = '/homeRAID/efini/dataset/ground/masks'
 
     files = os.listdir(dir)
-    file = [os.path.join(dir,f) for f in files if time.strftime('%Y%m%d') in f][0]
+    try:
+        file = [os.path.join(dir,f) for f in files if time.strftime('%Y%m%d') in f][0]
+    except Exception as e:
+        print(e)
+        return
+
     if file.split('/')[-1].split('.')[0]+'.png' in os.listdir(dir_out):
         return
     print(file)
@@ -320,7 +322,7 @@ def create_image_ground(row, fenyi_sunspot):
 
     out_filename = file.split('.')[0].split('\\')[-1]
 
-    cv2.imwrite(os.path.join(dir_out,out_filename+'.png'), ((img*2**16) -1).astype(np.uint16))
+    cv2.imwrite(os.path.join(dir_out,out_filename+'.png'), (img*(2**16 -1)).astype(np.uint16))
     Image.fromarray(instances.astype(np.uint8)).save(os.path.join(dir_mask_out,out_filename+'_mask.png'))
 
 

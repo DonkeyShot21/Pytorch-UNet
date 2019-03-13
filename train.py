@@ -8,7 +8,6 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 from torch import optim
-import torchvision.utils as vutils
 
 from eval import eval
 from unet import UNet
@@ -42,8 +41,6 @@ def train(net,
     dir_checkpoint = '/homeRAID/efini/checkpoints/'
     now = datetime.now().strftime('%b%d_%H-%M-%S')
     writer = tensorboardX.SummaryWriter(os.path.join(logdir, now))
-
-
 
     dataset = HelioDataset('data/sidc/SIDC_dataset.csv',
                            '/homeRAID/efini/dataset/ground/train',
@@ -94,19 +91,14 @@ def train(net,
         print('Epoch finished!')
 
         if 1:
-           val_loss, val_plots = eval(net,
-                            	      batch_size=batch_size,
-                                      patch_size=patch_size,
-                                      gpu=gpu,
-                                      num_viz=3)
-           writer.add_scalar('val-bce-loss', val_loss['bce'], epoch)
-           writer.add_scalar('val-dice-coeff', val_loss['dice'], epoch)
-           val_plots = val_plots.permute(0,3,1,2)
-           grid = vutils.make_grid(val_plots, normalize=True)
-           writer.add_image('val-viz', grid, epoch)
-           print('Average validation loss:',
-                 *['> {}: {:.6f}'.format(k,v) for k,v in val_loss.items()])
-
+            eval(net,
+    	         batch_size=batch_size,
+                 patch_size=patch_size,
+                 num_workers=num_workers,
+                 epoch=epoch,
+                 writer=writer,
+                 gpu=gpu,
+                 num_viz=3)
 
         if save_cp:
             torch.save(net.state_dict(),

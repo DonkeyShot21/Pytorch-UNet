@@ -13,16 +13,19 @@ from PIL import Image
 
 
 
-def eval(net, batch_size, gpu=False, num_viz=3):
+def eval(net, batch_size, patch_size, num_workers, writer, epoch,
+         gpu=False, num_viz=3):
     print('Starting validation')
     net.eval()
     bce = BCELoss()
 
     val_dataset = HelioDataset('data/sidc/SIDC_dataset.csv',
                                '/homeRAID/efini/dataset/ground/validation',
-                               '/homeRAID/efini/dataset/SDO/validation')
+                               '/homeRAID/efini/dataset/SDO/validation',
+                               patch_size=patch_size)
     val_dataloader = DataLoader(val_dataset,
                                 batch_size=1,
+                                num_workers=num_workers,
                                 shuffle=True)
 
     viz = []
@@ -59,7 +62,17 @@ def eval(net, batch_size, gpu=False, num_viz=3):
         val_loss['bce'] += obs_loss['bce']
         val_loss['dice'] +=  obs_loss['dice']
 
-    return {k:v/len(val_dataset) for k,v in val_loss.items()}, Tensor(viz)
+    val_loss.update({k:v/len(val_dataset) for k,v in val_loss.items()})
+    viz =Tensor(viz)
+    writer.add_scalar('val-bce-loss', val_loss['bce'], epoch)
+    writer.add_scalar('val-dice-coeff', val_loss['dice'], epoch)
+    val_plots = val_plots.permute(0,3,1,2)
+    grid = vutils.make_grid(val_plots, normalize=True)
+    writer.add_image('val-viz', grid, epoch)
+    print('Average validation loss:',
+         *['> {}: {:.6f}'.format(k,v) for k,v in val_loss.items()])
+
+    return
 
 
 

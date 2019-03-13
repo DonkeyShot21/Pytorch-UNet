@@ -63,12 +63,12 @@ def eval(net, batch_size, patch_size, num_workers, writer, epoch,
         val_loss['dice'] +=  obs_loss['dice']
 
     val_loss.update({k:v/len(val_dataset) for k,v in val_loss.items()})
-    viz =Tensor(viz)
     writer.add_scalar('val-bce-loss', val_loss['bce'], epoch)
     writer.add_scalar('val-dice-coeff', val_loss['dice'], epoch)
-    val_plots = val_plots.permute(0,3,1,2)
-    grid = vutils.make_grid(val_plots, normalize=True)
+    viz = Tensor(viz).permute(0,3,1,2)
+    grid = vutils.make_grid(viz, normalize=True)
     writer.add_image('val-viz', grid, epoch)
+
     print('Average validation loss:',
          *['> {}: {:.6f}'.format(k,v) for k,v in val_loss.items()])
 

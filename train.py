@@ -28,6 +28,7 @@ def train(net,
           gpu=False,
           epoch_size=10,
           patch_size=200,
+          num_workers=3,
           obs_size=1):
 
     print('''Starting training:
@@ -46,9 +47,11 @@ def train(net,
 
     dataset = HelioDataset('data/sidc/SIDC_dataset.csv',
                            '/homeRAID/efini/dataset/ground/train',
-                           '/homeRAID/efini/dataset/SDO/train')
+                           '/homeRAID/efini/dataset/SDO/train',
+                           patch_size=patch_size)
     dataloader = DataLoader(dataset,
                             batch_size=obs_size,
+                            num_workers=num_workers,
                             shuffle=True)
 
     optimizer = optim.SGD(net.parameters(),
@@ -81,7 +84,7 @@ def train(net,
                 pred_masks = (pred_masks > 0.5).float()
                 obs_loss['dice'] += dice_coeff(pred_masks, true_masks).item()
 
-            global_step = epoch*len(dataset) + obs_idx
+            global_step = (epoch-1)*len(dataset) + obs_idx
             obs_loss.update((k,v/num_patches) for k,v in obs_loss.items())
             writer.add_scalar('train-bce-loss', obs_loss['bce'], global_step)
             writer.add_scalar('train-dice-coeff', obs_loss['dice'], global_step)
@@ -91,7 +94,11 @@ def train(net,
         print('Epoch finished!')
 
         if 1:
-           val_loss, val_plots = eval(net, batch_size, gpu, num_viz=3)
+           val_loss, val_plots = eval(net,
+                            	      batch_size=batch_size,
+                                      patch_size=patch_size,
+                                      gpu=gpu,
+                                      num_viz=3)
            writer.add_scalar('val-bce-loss', val_loss['bce'], epoch)
            writer.add_scalar('val-dice-coeff', val_loss['dice'], epoch)
            val_plots = val_plots.permute(0,3,1,2)
@@ -124,11 +131,15 @@ def get_args():
                       default=0.5, help='downscaling factor of the images')
     parser.add_option('-z', '--epoch-size', dest='epoch', type='int',
                       default=10, help=' of the epochs')
-    parser.add_option('-w', '--patch_size', type='int', dest='patch_size',
-                      default=512, help="size of each patch of the images")
+    parser.add_option('-p', '--patch-size', type='int', dest='patch_size',
+                      default=200, help="size of each patch of the images")
     parser.add_option('-d', '--logdir', type='str', dest='logdir',
                       default='/homeRAID/efini/logs', help="log directory")
+    parser.add_option('-w', '--num-workers', dest='num_workers', default=3,
+                      type='int', help='number of workers')
     parser.add_option('-y', '--obs-size', dest='obs_size', default=1)
+
+
 
     (options, args) = parser.parse_args()
     return options
@@ -155,7 +166,8 @@ if __name__ == '__main__':
               gpu=args.gpu,
               epoch_size=args.epoch,
               patch_size=args.patch_size,
-              obs_size=args.obs_size)
+              obs_size=args.obs_size,
+              num_workers=args.num_workers)
     except KeyboardInterrupt:
         torch.save(net.state_dict(), 'INTERRUPTED.pth')
         print('Saved interrupt')

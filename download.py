@@ -322,11 +322,7 @@ def create_image_ground(row, fenyi_sunspot):
 
     out_filename = file.split('.')[0].split('/')[-1]
 
-<<<<<<< HEAD
     cv2.imwrite(os.path.join(dir_out,out_filename+'.png'), (img*(2**16-1)).astype(np.uint16))
-=======
-    cv2.imwrite(os.path.join(dir_out,out_filename+'.png'), (img*(2**16 -1)).astype(np.uint16))
->>>>>>> 4032dedea2ef4d46caa170ac2b0301af3acbbf8b
     Image.fromarray(instances.astype(np.uint8)).save(os.path.join(dir_mask_out,out_filename+'_mask.png'))
 
 

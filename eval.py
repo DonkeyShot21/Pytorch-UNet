@@ -13,7 +13,7 @@ from PIL import Image
 
 
 
-def eval(net, batch_size, patch_size, num_workers, writer, epoch,
+def eval(net, device, patch_size, num_workers, writer, epoch,
          gpu=False, num_viz=3):
     print('Starting validation')
     net.eval()
@@ -32,31 +32,25 @@ def eval(net, batch_size, patch_size, num_workers, writer, epoch,
     val_loss = {'bce': 0, 'dice': 0}
     for obs_idx, obs in enumerate(val_dataloader):
         obs_loss = {'bce': 0, 'dice': 0}
-        num_patches = len(obs['patches'][0])
-        for idx in range(0, num_patches, batch_size):
-            patches = obs['patches'][0][idx:idx+batch_size].float()
-            true_masks = obs['masks'][0][idx:idx+batch_size].float()
-            if gpu:
-                patches = patches.cuda()
-                true_masks = true_masks.cuda()
-            pred_masks = net(patches)
-            pred_masks_flat = pred_masks.view(-1)
-            true_masks_flat = true_masks.view(-1)
-            bce_loss = bce(pred_masks_flat, true_masks_flat)
-            obs_loss['bce'] += bce_loss.item()
-            pred_masks = (pred_masks > 0.5).float()
-            obs_loss['dice'] += dice_coeff(pred_masks, true_masks).item()
-            if obs_idx < num_viz:
-                viz_patches = to_uint8(np.array(patches.cpu()))
-                viz_true = np.array(true_masks.cpu())
-                viz_pred = np.array(pred_masks.cpu())
-                plots = np.array([[plot_mask(viz_patches[i][0], viz_pred[i][0]),
-                                   plot_mask(viz_patches[i][0], viz_true[i][0])]
-                                   for i in range(len(patches))])
-                viz.extend(plots.reshape(2*len(patches),*plots.shape[2:]))
+        patches = obs['patches'][0].float().to(device)
+        true_masks = obs['masks'][0]. float().to(device)
+        pred_masks = net(patches)
+        pred_masks_flat = pred_masks.view(-1)
+        true_masks_flat = true_masks.view(-1)
+        bce_loss = bce(pred_masks_flat, true_masks_flat)
+        obs_loss['bce'] += bce_loss.item()
+        pred_masks = (pred_masks > 0.5).float()
+        obs_loss['dice'] += dice_coeff(pred_masks, true_masks).item()
 
-        obs_loss['bce'] /= num_patches
-        obs_loss['dice'] /= num_patches
+        if obs_idx < num_viz:
+            patches_np = to_uint8(np.array(patches.cpu()))
+            true_np = np.array(true_masks.cpu())
+            pred_np = np.array(pred_masks.cpu())
+            plots = np.array([[plot_mask(patches_np[i][0], pred_np[i][0]),
+                               plot_mask(patches_np[i][0], true_np[i][0])]
+                               for i in range(len(patches))])
+            viz.extend(plots.reshape(2*len(patches),*plots.shape[2:]))
+
         print('Observation', obs['date'][0], '| validation loss:',
               *['> {}: {:.6f}'.format(k,v) for k,v in obs_loss.items()])
         val_loss['bce'] += obs_loss['bce']

@@ -19,28 +19,27 @@ def rotate_coord(map, coord, date):
     px = map.world_to_pixel(rotated_coord_sc)
     return [(int(px.x[i].value),int(px.y[i].value)) for i in range(len(px.x))]
 
-def slice(obs, window, stride):
-    cont = obs["inputs"][0][0]
-    mag = obs["inputs"][0][1]
-    mask = obs["mask"][0]
-    slices = {'inputs': [], 'masks': []}
-    for x in range(0, cont.shape[0]-window+1, stride):
-        for y in range(0, cont.shape[1]-window+1, stride):
-            mask_patch = mask[x:x+window,y:y+window]
-            cont_patch = cont[x:x+window,y:y+window]
-            mag_patch = mag[x:x+window,y:y+window]
-            slices['inputs'].append(torch.stack([cont_patch, mag_patch]))
-            slices['masks'].append(torch.stack([mask_patch]))
-    slices["inputs"] = torch.stack(slices["inputs"])
-    slices["masks"] = torch.stack(slices["masks"])
-    return slices
+def patchify(full_disk, full_disk_mask, patch_size, overlap):
+    patches = []
+    masks = []
+    stride = int(patch_size - (overlap * patch_size))
+    for x in range(0, full_disk.shape[0]-patch_size+1, stride):
+        for y in range(0, full_disk.shape[1]-patch_size+1, stride):
+            patch = full_disk[x:x+patch_size,y:y+patch_size]
+            mask = full_disk_mask[x:x+patch_size,y:y+patch_size]
+            patches.append([patch])
+            masks.append([mask])
+    return np.array(patches), np.array(masks)
 
-def keep_best(obs, n):
-    counts = [np.count_nonzero(m) for m in obs["masks"]]
-    indices = np.argpartition(counts, -n)[-n:]
-    obs["inputs"] = obs["inputs"][indices]
-    obs["masks"] = obs["masks"][indices]
-    return obs
+
+def sample_patches(patches, masks, num_patches):
+    counts = np.array([np.count_nonzero(m) for m in masks])
+    # if you want the best n patches use this:
+    # indices = np.argpartition(counts, -n)[-n:]
+    # instead we sample with probability:
+    probs = counts / sum(counts)
+    indices = np.random.choice(len(masks), num_patches, p=probs, replace=False)
+    return patches[indices], masks[indices]
 
 def normalize_map(map):
     img = map.data

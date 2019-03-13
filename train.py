@@ -8,27 +8,27 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 from torch import optim
+import torchvision.utils as vutils
 
-from eval import eval_net
+from eval import eval
 from unet import UNet
 
 from dataset import HelioDataset
 from dice_loss import dice_coeff
 
-from utils.utils import keep_best, slice
+import tensorboardX
+from datetime import datetime
 
-# from utils import get_ids, split_ids, split_train_val, get_imgs_and_masks, batch
-
-def train_net(net,
-              epochs=5,
-              batch_size=1,
-              lr=0.01,
-              val_percent=0.05,
-              save_cp=True,
-              gpu=False,
-              epoch_size=10,
-              window=512,
-              obs_size=10):
+def train(net,
+          logdir,
+          epochs=5,
+          batch_size=5,
+          lr=0.01,
+          save_cp=True,
+          gpu=False,
+          epoch_size=10,
+          patch_size=200,
+          obs_size=1):
 
     print('''Starting training:
                 Epochs: {}
@@ -36,70 +36,84 @@ def train_net(net,
                 Learning rate: {}
                 Checkpoints: {}
                 CUDA: {}
-            '''.format(epochs, batch_size, lr, str(save_cp), str(gpu)))
+          '''.format(epochs, batch_size, lr, str(save_cp), str(gpu)))
 
-    dir_checkpoint = 'checkpoints/'
+    dir_checkpoint = '/homeRAID/efini/checkpoints/'
+    now = datetime.now().strftime('%b%d_%H-%M-%S')
+    writer = tensorboardX.SummaryWriter(os.path.join(logdir, now))
 
-    dataset = HelioDataset('data/SIDC_dataset.csv',
-                           'data/fenyi',
-                           epoch_size)
+
+
+    dataset = HelioDataset('data/sidc/SIDC_dataset.csv',
+                           '/homeRAID/efini/dataset/ground/train',
+                           '/homeRAID/efini/dataset/SDO/train')
+    dataloader = DataLoader(dataset,
+                            batch_size=obs_size,
+                            shuffle=True)
 
     optimizer = optim.SGD(net.parameters(),
                           lr=lr,
                           momentum=0.9,
                           weight_decay=0.0005)
-
     bce = nn.BCELoss()
 
-    data_loader = DataLoader(dataset)
-
-    for epoch in range(epochs):
-        print('Starting epoch {}/{}.'.format(epoch + 1, epochs))
-        net.train()
-
-        for _, obs in enumerate(data_loader):
-            obs = keep_best(slice(obs, window, window // 2), obs_size)
-
-            for idx in range(0, len(obs['inputs']), batch_size):
-                imgs = obs['inputs'][idx:idx+batch_size].float()
-                true_masks = obs['mask'][idx:idx+batch_size].float()
-
+    for epoch in range(1,epochs+1):
+        print('Starting epoch {}/{}.'.format(epoch, epochs))
+        for obs_idx, obs in enumerate(dataloader):
+            net.train()
+            obs_loss = {'bce': 0, 'dice': 0}
+            num_patches = len(obs['patches'])
+            for idx in range(0, num_patches, batch_size):
+                patches = obs['patches'][idx:idx+batch_size].float()[0]
+                true_masks = obs['masks'][idx:idx+batch_size].float()[0]
                 if gpu:
-                    imgs = imgs.cuda()
+                    patches = patches.cuda()
                     true_masks = true_masks.cuda()
-
-                masks_pred = net(imgs)
-                masks_probs_flat = masks_pred.view(-1)
-
+                pred_masks = net(patches)
+                pred_masks_flat = pred_masks.view(-1)
                 true_masks_flat = true_masks.view(-1)
-
-                loss = bce(masks_probs_flat, true_masks_flat)
-
-                print(int(idx),'-',int(idx+batch_size),'> loss: {0:.6f}'.format(loss.item()))
-
+                bce_loss = bce(pred_masks_flat, true_masks_flat)
                 optimizer.zero_grad()
-                loss.backward()
+                bce_loss.backward()
                 optimizer.step()
+
+                obs_loss['bce'] += bce_loss.item()
+                pred_masks = (pred_masks > 0.5).float()
+                obs_loss['dice'] += dice_coeff(pred_masks, true_masks).item()
+
+            global_step = epoch*len(dataset) + obs_idx
+            obs_loss.update((k,v/num_patches) for k,v in obs_loss.items())
+            writer.add_scalar('train-bce-loss', obs_loss['bce'], global_step)
+            writer.add_scalar('train-dice-coeff', obs_loss['dice'], global_step)
+            print('Observation', obs['date'][0], '| validation loss:',
+                  *['> {}: {:.6f}'.format(k,v) for k,v in obs_loss.items()])
 
         print('Epoch finished!')
 
-        #if 1:
-        #    val_dice = eval_net(net, val, gpu)
-        #    print('Validation Dice Coeff: {}'.format(val_dice))
+        if 1:
+           val_loss, val_plots = eval(net, batch_size, gpu, num_viz=3)
+           writer.add_scalar('val-bce-loss', val_loss['bce'], epoch)
+           writer.add_scalar('val-dice-coeff', val_loss['dice'], epoch)
+           val_plots = val_plots.permute(0,3,1,2)
+           grid = vutils.make_grid(val_plots, normalize=True)
+           writer.add_image('val-viz', grid, epoch)
+           print('Average validation loss:',
+                 *['> {}: {:.6f}'.format(k,v) for k,v in val_loss.items()])
+
 
         if save_cp:
             torch.save(net.state_dict(),
-                       dir_checkpoint + 'CP512-{}.pth'.format(epoch + 1))
-            print('Checkpoint {} saved !'.format(epoch + 1))
+                       dir_checkpoint + 'CP512-{}.pth'.format(epoch))
+            print('Checkpoint {} saved !'.format(epoch))
 
 
 
 def get_args():
     parser = OptionParser()
-    parser.add_option('-e', '--epochs', dest='epochs', default=5, type='int',
+    parser.add_option('-e', '--epochs', dest='epochs', default=10, type='int',
                       help='number of epochs')
     parser.add_option('-b', '--batch-size', dest='batch', default=5,
-                      type='int', help='batch ')
+                      type='int', help='batch size')
     parser.add_option('-l', '--learning-rate', dest='lr', default=0.01,
                       type='float', help='learning rate')
     parser.add_option('-g', '--gpu', action='store_true', dest='gpu',
@@ -110,9 +124,11 @@ def get_args():
                       default=0.5, help='downscaling factor of the images')
     parser.add_option('-z', '--epoch-size', dest='epoch', type='int',
                       default=10, help=' of the epochs')
-    parser.add_option('-w', '--window', type='int', dest='window', default=512,
-                      help="size of each window/slice of the images")
-    parser.add_option('-y', '--obs-size', dest='obs_size', default=10)
+    parser.add_option('-w', '--patch_size', type='int', dest='patch_size',
+                      default=512, help="size of each patch of the images")
+    parser.add_option('-d', '--logdir', type='str', dest='logdir',
+                      default='/homeRAID/efini/logs', help="log directory")
+    parser.add_option('-y', '--obs-size', dest='obs_size', default=1)
 
     (options, args) = parser.parse_args()
     return options
@@ -120,7 +136,7 @@ def get_args():
 if __name__ == '__main__':
     args = get_args()
 
-    net = UNet(n_channels=2, n_classes=1)
+    net = UNet(n_channels=1, n_classes=1)
 
     if args.load:
         net.load_state_dict(torch.load(args.load))
@@ -131,14 +147,15 @@ if __name__ == '__main__':
         # cudnn.benchmark = True # faster convolutions, but more memory
 
     try:
-        train_net(net=net,
-                  epochs=args.epochs,
-                  batch_size=args.batch,
-                  lr=args.lr,
-                  gpu=args.gpu,
-                  epoch_size=args.epoch,
-                  window=args.window,
-                  obs_size=args.obs_size)
+        train(net=net,
+              logdir=args.logdir,
+              epochs=args.epochs,
+              batch_size=args.batch,
+              lr=args.lr,
+              gpu=args.gpu,
+              epoch_size=args.epoch,
+              patch_size=args.patch_size,
+              obs_size=args.obs_size)
     except KeyboardInterrupt:
         torch.save(net.state_dict(), 'INTERRUPTED.pth')
         print('Saved interrupt')

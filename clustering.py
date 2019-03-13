@@ -1,6 +1,6 @@
 from dataset import HelioDataset
 from torch.utils.data import DataLoader
-import torch.nn.functional as F
+from torch import sigmoid
 from torch import nn
 from torch import FloatTensor
 from torch.optim import Adam
@@ -25,7 +25,7 @@ class NeuralSimilarity(nn.Module):
         out = self.fc1(x)
         out = self.relu(out)
         out = self.fc2(out)
-        return F.sigmoid(out)
+        return sigmoid(out)
 
     def distance(self, x1, x2):
         x = FloatTensor([*x1, *x2])

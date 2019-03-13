@@ -47,9 +47,9 @@ def eval(net, batch_size, patch_size, num_workers, writer, epoch,
             pred_masks = (pred_masks > 0.5).float()
             obs_loss['dice'] += dice_coeff(pred_masks, true_masks).item()
             if obs_idx < num_viz:
-                viz_patches = to_uint8(np.array(patches))
-                viz_true =np.array(true_masks)
-                viz_pred = np.array(pred_masks)#.astype(np.uint8)
+                viz_patches = to_uint8(np.array(patches.cpu()))
+                viz_true = np.array(true_masks.cpu())
+                viz_pred = np.array(pred_masks.cpu())
                 plots = np.array([[plot_mask(viz_patches[i][0], viz_pred[i][0]),
                                    plot_mask(viz_patches[i][0], viz_true[i][0])]
                                    for i in range(len(patches))])

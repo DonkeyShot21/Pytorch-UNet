@@ -85,7 +85,7 @@ def train(net,
             obs_loss.update((k,v/num_patches) for k,v in obs_loss.items())
             writer.add_scalar('train-bce-loss', obs_loss['bce'], global_step)
             writer.add_scalar('train-dice-coeff', obs_loss['dice'], global_step)
-            print('Observation', obs['date'][0], '| validation loss:',
+            print('Observation', obs['date'][0], '| loss:',
                   *['> {}: {:.6f}'.format(k,v) for k,v in obs_loss.items()])
 
         print('Epoch finished!')

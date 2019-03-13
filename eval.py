@@ -24,7 +24,7 @@ def eval(net, batch_size, gpu=False, num_viz=3):
     val_dataloader = DataLoader(val_dataset,
                                 batch_size=1,
                                 shuffle=True)
-                                
+
     viz = []
     val_loss = {'bce': 0, 'dice': 0}
     for obs_idx, obs in enumerate(val_dataloader):
@@ -54,7 +54,7 @@ def eval(net, batch_size, gpu=False, num_viz=3):
 
         obs_loss['bce'] /= num_patches
         obs_loss['dice'] /= num_patches
-        print('Observation', obs['date'][0], '| loss:',
+        print('Observation', obs['date'][0], '| validation loss:',
               *['> {}: {:.6f}'.format(k,v) for k,v in obs_loss.items()])
         val_loss['bce'] += obs_loss['bce']
         val_loss['dice'] +=  obs_loss['dice']

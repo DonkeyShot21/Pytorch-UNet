@@ -48,9 +48,7 @@ def normalize_map(map):
 def normalize_img(img):
     img[np.isnan(img)] = 0
     img_min = np.amin(img)
-    print(img_min)
     img_max = np.amax(img)
-    print(img_max)
     return (img - img_min) / (img_max - img_min)
 
 def to_uint8(img):

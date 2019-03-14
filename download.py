@@ -23,7 +23,7 @@ import numpy as np
 from torchvision.transforms import Compose
 
 from utils.load import search_VSO, remove_if_exists
-from utils.utils import slice, rotate_coord, keep_best, normalize_map, normalize_img, to_uint8
+from utils.utils import rotate_coord, normalize_map, normalize_img, to_uint8
 from utils.data_vis import plot_mask
 
 import warnings
@@ -32,7 +32,7 @@ warnings.filterwarnings('ignore')
 
 
 
-def create_dataset_SDO(SIDC_filename, fenyi_dir):
+def create_dataset_SDO(SIDC_filename, usaf_dir, fenyi_dir):
 
     sidc_csv = pd.read_csv(SIDC_filename, sep=';', header=None)
     sidc_csv.drop(sidc_csv[[3,5,6,7]], axis=1, inplace=True)
@@ -48,12 +48,25 @@ def create_dataset_SDO(SIDC_filename, fenyi_dir):
 
     sidc_csv = sidc_csv[sidc_csv[0].isin(years)]
 
+    # usaf_sunspot = []
+    # for usaf_fn in os.listdir(usaf_dir):
+    #     fn = os.path.join(usaf_dir,usaf_fn)
+    #     usaf_sunspot.append(pd.read_csv(fn, sep=' '))
+    # usaf_sunspot = pd.concat(usaf_sunspot)
+    # print(usaf_sunspot.head())
+
+    usaf_sunspot = []
+    for usaf_fn in os.listdir(usaf_dir):
+        with open(os.path.join(usaf_dir, usaf_fn)) as f:
+            for i,line in enumerate(f):
+                usaf_sunspot.append([line[2:8], line[33:38], line[39]])
+    usaf_sunspot = pd.DataFrame(usaf_sunspot)
 
     for index, row in sidc_csv.iterrows():
-        create_image_SDO(row, fenyi_sunspot)
+        create_image_SDO(row, fenyi_sunspot, usaf_sunspot)
 
 
-def create_image_SDO(row, fenyi_sunspot):
+def create_image_SDO(row, fenyi_sunspot, usaf_sunspot):
     row = row.to_frame().transpose()
 
     # sampling with probability from SIDC
@@ -86,14 +99,13 @@ def create_image_SDO(row, fenyi_sunspot):
 
     # SDO
 
-    dir = '/homeRAID/efini/dataset/SDO/images'
-    dir_out = '/homeRAID/efini/dataset/SDO/products'
+    dir = '/homeRAID/efini/dataset/SDO/fits'
     dir_mask_out = '/homeRAID/efini/dataset/SDO/masks'
-
 
     start_time = (time - timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')
     end_time = (time + timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')
 
+    files = os.listdir(dir)
     try:
         file = [os.path.join(dir,f) for f in files if time.strftime('%Y%m%d') in f][0]
         print(file)
@@ -101,7 +113,6 @@ def create_image_SDO(row, fenyi_sunspot):
     except Exception as e:
         print(e)
         return
-
 
     # get the data from the maps
     img = normalize_map(hmi)
@@ -113,7 +124,7 @@ def create_image_SDO(row, fenyi_sunspot):
     sunspots = rotate_coord(hmi, ss_coord, ss_date)
 
     # mask = (255 * img_cont).astype(np.uint8)
-    instances = np.zeros(img.shape, dtype=np.float32)
+    instances = np.zeros(list(img.shape)+[3], dtype=np.float32)
     mask = np.zeros(img.shape, dtype=np.float32)
 
     disk_mask = np.where(255*img > 10)
@@ -125,6 +136,15 @@ def create_image_SDO(row, fenyi_sunspot):
         p = sunspots[i]
 
         group_idx = groups.index(ws.iloc[i]['group_number'])
+        group_name = ws.iloc[i]['group_number']
+        new_string = ''.join(ch for ch in group_name if ch.isdigit())
+        group_class = usaf_sunspot[(usaf_sunspot[0] == time.strftime('%Y%m%d')[2:]) & (usaf_sunspot[1] == group_name)][2]
+        if group_class.empty:
+            group_class = 0
+        else:
+            group_class = group_class.iloc[0]
+            group_class = ord(group_class)
+
         patch = img[int(p[1])-o:int(p[1])+o,int(p[0])-o:int(p[0])+o]
         low = np.where(patch == np.amin(patch))
 
@@ -151,7 +171,8 @@ def create_image_SDO(row, fenyi_sunspot):
             whole_spot.update(set(new))
 
         for c in set.intersection(whole_spot, disk_mask):
-            instances[c] = 255 - group_idx
+            instances[c][0] = 255 - group_idx
+            instances[c][1] = group_class
 
 
     x, y = [c[0] for c in disk_mask], [c[1] for c in disk_mask]
@@ -160,15 +181,15 @@ def create_image_SDO(row, fenyi_sunspot):
 
     top_left, bottom_right = (minx, miny), (maxx, maxy)
 
-    img = img[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
-    img = cv2.resize(img, (4000, 4000))
+    # img = img[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
+    # img = cv2.resize(img, (4000, 4000))
 
     instances = instances[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
     instances = cv2.resize(instances, (4000, 4000), interpolation=cv2.INTER_NEAREST)
 
     out_filename = file.split('.')[0].split('/')[-1]
 
-    cv2.imwrite(os.path.join(dir_out,out_filename+'.png'), (img*(2**16 -1)).astype(np.uint16))
+    # cv2.imwrite(os.path.join(dir_out,out_filename+'.png'), (img*(2**16 -1)).astype(np.uint16))
     Image.fromarray(instances.astype(np.uint8)).save(os.path.join(dir_mask_out,out_filename+'_mask.png'))
 
 
@@ -332,10 +353,12 @@ if __name__ == '__main__':
 
     if sys.argv[1] == 'SDO':
         create_dataset_SDO('data/sidc/SIDC_dataset.csv',
+                           'data/usaf/',
                            'data/dpd/')
     if sys.argv[1] == 'ground':
         create_dataset_ground('data/sidc/SIDC_dataset.csv',
-                             'data/dpd/')
+                              'data/usaf/',
+                              'data/dpd/')
 
 
 

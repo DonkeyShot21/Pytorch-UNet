@@ -3,7 +3,7 @@ from torch.nn import BCELoss
 import torch.nn.functional as F
 from dataset import HelioDataset
 from torch.utils.data import DataLoader
-from dice_loss import dice_coeff
+from loss import dice_coeff
 from utils import plot_mask, to_uint8
 import torchvision.utils as vutils
 from torch import Tensor

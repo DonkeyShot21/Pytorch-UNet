@@ -95,13 +95,13 @@ def create_image_SDO(row, fenyi_sunspot):
     end_time = (time + timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')
 
     try:
-        print("Searching VSO...")
-        file = search_VSO(start_time, end_time, dir)
+        file = [os.path.join(dir,f) for f in files if time.strftime('%Y%m%d') in f][0]
         print(file)
         hmi = Map(file)
     except Exception as e:
         print(e)
         return
+
 
     # get the data from the maps
     img = normalize_map(hmi)
@@ -164,7 +164,7 @@ def create_image_SDO(row, fenyi_sunspot):
     img = cv2.resize(img, (4000, 4000))
 
     instances = instances[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
-    instances = cv2.resize(instances, (4000, 4000))
+    instances = cv2.resize(instances, (4000, 4000), interpolation=cv2.INTER_NEAREST)
 
     out_filename = file.split('.')[0].split('/')[-1]
 
@@ -318,7 +318,7 @@ def create_image_ground(row, fenyi_sunspot):
     img = cv2.resize(img, (4000, 4000))
 
     instances = instances[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
-    instances = cv2.resize(instances, (4000, 4000))
+    instances = cv2.resize(instances, (4000, 4000), interpolation=cv2.INTER_NEAREST)
 
     out_filename = file.split('.')[0].split('/')[-1]
 

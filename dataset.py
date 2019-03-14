@@ -60,7 +60,7 @@ class HelioDataset(Dataset):
         full_disk = cv2.imread(self.data[idx]['img_path'], -1)
         full_disk = full_disk.astype(np.float32)/ np.amax(full_disk)
         full_disk_instances = cv2.imread(self.data[idx]['mask_path'], 0)
-        full_disk_mask = full_disk_instances // 200 # assumes num instances < 50
+        full_disk_mask = np.clip(full_disk_instances, 0, 1)
         sunspot_number = self.data[idx]['sunspot_number']
         num_patches = sunspot_number // self.sunspots_per_patch
         patches, masks = patchify(full_disk, full_disk_mask,
@@ -71,6 +71,7 @@ class HelioDataset(Dataset):
                 'masks': masks,
                 'full_disk': full_disk,
                 'full_disk_instances': full_disk_instances,
+                'full_disk_mask': full_disk_mask,
                 'sunspot_number': sunspot_number,
                 'date': self.data[idx]['date']}
 

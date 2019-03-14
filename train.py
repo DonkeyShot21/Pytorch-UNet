@@ -1,5 +1,4 @@
-import sys
-import os
+import sys, os, cv2, random
 from optparse import OptionParser
 from torch.utils.data import DataLoader
 import numpy as np
@@ -10,22 +9,26 @@ import torch.nn as nn
 from torch import optim
 
 from eval import eval
-from unet import UNet
+from models import UNet
+from models import SiameseHybrid
 
 from dataset import HelioDataset
-from dice_loss import dice_coeff
+from loss import dice_coeff
 
 import tensorboardX
 from datetime import datetime
 
-def train(net,
+from PIL import Image
+
+def train(unet,
+          siamese,
           logdir,
           device,
           epochs=5,
-          lr=0.01,
+          lr=0.001,
           save_cp=True,
-          epoch_size=10,
           patch_size=200,
+          sampling_ratio=0.2,
           num_workers=3):
 
     dir_checkpoint = '/homeRAID/efini/checkpoints/'
@@ -41,30 +44,22 @@ def train(net,
                             num_workers=num_workers,
                             shuffle=True)
 
-    optimizer = optim.SGD(net.parameters(),
+    optimizer = optim.SGD(unet.parameters(),
                           lr=lr,
                           momentum=0.9,
                           weight_decay=0.0005)
     bce = nn.BCELoss()
 
     for epoch in range(1,epochs+1):
-
-        if 1:
-            eval(net,
-                 device,
-                 patch_size=patch_size,
-                 num_workers=num_workers,
-                 epoch=epoch,
-                 writer=writer,
-                 num_viz=3)
-
+        unet.train()
+        siamese.train()
         print('Starting epoch {}/{}.'.format(epoch, epochs))
         for obs_idx, obs in enumerate(dataloader):
-            net.train()
-            obs_loss = {'bce': 0, 'dice': 0}
+
+            # --- TRAIN UNET --- #
             patches = obs['patches'][0].float().to(device)
             true_masks = obs['masks'][0].float().to(device)
-            pred_masks = net(patches)
+            pred_masks = unet(patches)
             pred_masks_flat = pred_masks.view(-1)
             true_masks_flat = true_masks.view(-1)
             bce_loss = bce(pred_masks_flat, true_masks_flat)
@@ -72,19 +67,68 @@ def train(net,
             bce_loss.backward()
             optimizer.step()
 
-            obs_loss['bce'] += bce_loss.item()
+            # log unet stuff
+            step = (epoch-1) * len(dataset) + obs_idx
             pred_masks = (pred_masks > 0.5).float()
-            obs_loss['dice'] += dice_coeff(pred_masks, true_masks).item()
-            global_step = (epoch-1)*len(dataset) + obs_idx
-            writer.add_scalar('train-bce-loss', obs_loss['bce'], global_step)
-            writer.add_scalar('train-dice-coeff', obs_loss['dice'], global_step)
+            dice = dice_coeff(pred_masks, true_masks).item()
+            writer.add_scalar('train-unet-bce-loss', bce_loss.item(), step)
+            writer.add_scalar('train-unet-dice-coeff', dice, step)
             print('Observation', obs['date'][0], '| loss:',
-                  *['> {}: {:.6f}'.format(k,v) for k,v in obs_loss.items()])
+                  '> bce: {:.6f} > dice {:.6f}'.format(bce_loss.item(), dice))
+
+            # --- TRAIN SIAMESE --- #
+            full_disk = obs['full_disk'][0].float().to(device)
+            instances = np.array(obs['full_disk_instances'][0])
+            mask = np.array(obs['full_disk_mask'][0], dtype=np.uint8)
+
+            n, labels, stats, centers = cv2.connectedComponentsWithStats(mask)
+            true_clusters = [int(instances[labels==i][0]) for i in range(n)]
+            print(instances.dtype, np.amin(instances), np.amax(instances))
+
+
+            for i in range(1, n):
+                print(labels[i], stats[i], centers[i])
+
+            anchors = random.sample(range(1, 100), int(n * sampling_ratio) + 1)
+            for anchor in anchors:
+                # one positive example and one negative for every sunspot
+                c_id = true_clusters[i]
+                same = [s for s in range(1,ret) if true_clusters[s] == c_id]
+                other = [s for s in range(1,ret) if true_clusters[s] != c_id]
+                positive = random.sample(same, 1)[0]
+                negative = random.sample(other, 1)[0]
+
+                # input = []
+                # for j in [positive, negative]:
+                #     distance = centers[i] - centers[j]
+                #     intensity_diff = avg_intesitygram[i] - avg_intesitygram[j]
+                #     magnetic_diff = avg_magnetogram[i] - avg_magnetogram[j]
+                #     size_diff = stats[i][-1] - stats[i][-1]
+                #     row = [*distance, intensity_diff, magnetic_diff, size_diff]
+                #     input.append(row)
+
+                input = [[*data[i], *data[e]] for e in [negative, positive]]
+                gt = [[c_id == true_clusters[e]] for e in [negative, positive]]
+
+
+
+            siamese()
+
 
         print('Epoch finished!')
 
+
+        if 1:
+            eval(unet,
+                 device,
+                 patch_size=patch_size,
+                 num_workers=num_workers,
+                 epoch=epoch,
+                 writer=writer,
+                 num_viz=3)
+
         if save_cp:
-            torch.save(net.state_dict(),
+            torch.save(unet.state_dict(),
                        dir_checkpoint + 'CP512-{}.pth'.format(epoch))
             print('Checkpoint {} saved !'.format(epoch))
 
@@ -94,14 +138,12 @@ def get_args():
     parser = OptionParser()
     parser.add_option('-e', '--epochs', dest='epochs', default=10, type='int',
                       help='number of epochs')
-    parser.add_option('-l', '--learning-rate', dest='lr', default=0.01,
+    parser.add_option('-l', '--learning-rate', dest='lr', default=0.001,
                       type='float', help='learning rate')
     parser.add_option('-g', '--gpu', action='store_true', dest='gpu',
                       default=False, help='use cuda')
     parser.add_option('-c', '--load', dest='load',
                       default=False, help='load file model')
-    parser.add_option('-s', '--scale', dest='scale', type='float',
-                      default=0.5, help='downscaling factor of the images')
     parser.add_option('-z', '--epoch-size', dest='epoch', type='int',
                       default=10, help=' of the epochs')
     parser.add_option('-p', '--patch-size', type='int', dest='patch_size',
@@ -110,7 +152,8 @@ def get_args():
                       default='/homeRAID/efini/logs', help="log directory")
     parser.add_option('-w', '--num-workers', dest='num_workers', default=3,
                       type='int', help='number of workers')
-
+    parser.add_option('-s', '--sampling-ratio', dest='sampling_ratio',
+                      default=0.2, type='float', help='sampling ratio')
 
 
     (options, args) = parser.parse_args()
@@ -119,29 +162,32 @@ def get_args():
 if __name__ == '__main__':
     args = get_args()
 
-    net = UNet(n_channels=1, n_classes=1)
+    unet = UNet(n_channels=1, n_classes=1)
+    siamese = SiameseHybrid()
 
     if args.load:
-        net.load_state_dict(torch.load(args.load))
+        unet.load_state_dict(torch.load(args.load))
         print('Model loaded from {}'.format(args.load))
 
     if args.gpu:
-        device = torch.device(cuda)
-        net = net.to(device)
+        device = torch.device('cuda')
     else:
         device = torch.device('cpu')
 
+    unet = unet.to(device)
+    siamese = siamese.to(device)
+
     try:
-        train(net=net,
+        train(unet=unet,
+              siamese=siamese,
               logdir=args.logdir,
               epochs=args.epochs,
               lr=args.lr,
-              epoch_size=args.epoch,
               patch_size=args.patch_size,
               num_workers=args.num_workers,
               device=device)
     except KeyboardInterrupt:
-        torch.save(net.state_dict(), 'INTERRUPTED.pth')
+        torch.save(unet.state_dict(), 'INTERRUPTED.pth')
         print('Saved interrupt')
         try:
             sys.exit(0)

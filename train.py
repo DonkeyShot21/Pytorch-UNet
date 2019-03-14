@@ -49,14 +49,6 @@ def train(net,
 
     for epoch in range(1,epochs+1):
 
-        if 1:
-            eval(net,
-                 device,
-                 patch_size=patch_size,
-                 num_workers=num_workers,
-                 epoch=epoch,
-                 writer=writer,
-                 num_viz=3)
 
         print('Starting epoch {}/{}.'.format(epoch, epochs))
         for obs_idx, obs in enumerate(dataloader):
@@ -82,6 +74,16 @@ def train(net,
                   *['> {}: {:.6f}'.format(k,v) for k,v in obs_loss.items()])
 
         print('Epoch finished!')
+
+        if 1:
+            eval(net,
+                 device,
+                 patch_size=patch_size,
+                 num_workers=num_workers,
+                 epoch=epoch,
+                 writer=writer,
+                 num_viz=3)
+
 
         if save_cp:
             torch.save(net.state_dict(),
@@ -126,7 +128,7 @@ if __name__ == '__main__':
         print('Model loaded from {}'.format(args.load))
 
     if args.gpu:
-        device = torch.device(cuda)
+        device = torch.device('cuda')
         net = net.to(device)
     else:
         device = torch.device('cpu')

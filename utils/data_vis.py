@@ -11,7 +11,7 @@ def plot_mask(img, mask):
     mask = np.dstack((mask,mask,mask))
     mask = cv2.cvtColor(mask, cv2.COLOR_RGB2GRAY)
     ret, binary = cv2.threshold(mask, 40, 255, cv2.THRESH_BINARY)
-    im2,contours,hierarchy = cv2.findContours(binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    contours,hierarchy = cv2.findContours(binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
     for contour in contours:
         cv2.drawContours(im, contour, -1, (255,0,0), thickness = 1)
     img3 = np.dstack((im,im,im)).copy()

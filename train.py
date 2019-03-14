@@ -117,15 +117,15 @@ def train(unet,
 
         print('Epoch finished!')
 
-
         if 1:
-            eval(unet,
+            eval(net,
                  device,
                  patch_size=patch_size,
                  num_workers=num_workers,
                  epoch=epoch,
                  writer=writer,
                  num_viz=3)
+
 
         if save_cp:
             torch.save(unet.state_dict(),

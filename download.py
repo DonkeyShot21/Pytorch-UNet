@@ -48,13 +48,6 @@ def create_dataset_SDO(SIDC_filename, usaf_dir, fenyi_dir):
 
     sidc_csv = sidc_csv[sidc_csv[0].isin(years)]
 
-    # usaf_sunspot = []
-    # for usaf_fn in os.listdir(usaf_dir):
-    #     fn = os.path.join(usaf_dir,usaf_fn)
-    #     usaf_sunspot.append(pd.read_csv(fn, sep=' '))
-    # usaf_sunspot = pd.concat(usaf_sunspot)
-    # print(usaf_sunspot.head())
-
     usaf_sunspot = []
     for usaf_fn in os.listdir(usaf_dir):
         with open(os.path.join(usaf_dir, usaf_fn)) as f:
@@ -197,7 +190,7 @@ def create_image_SDO(row, fenyi_sunspot, usaf_sunspot):
 
 
 
-def create_dataset_ground(SIDC_filename, fenyi_dir):
+def create_dataset_ground(SIDC_filename, usaf_dir, fenyi_dir):
     #GROUND
     sidc_csv = pd.read_csv(SIDC_filename, sep=';', header=None)
     sidc_csv.drop(sidc_csv[[3,5,6,7]], axis=1, inplace=True)
@@ -213,15 +206,21 @@ def create_dataset_ground(SIDC_filename, fenyi_dir):
 
     sidc_csv = sidc_csv[sidc_csv[0].isin(years)]
 
+    usaf_sunspot = []
+    for usaf_fn in os.listdir(usaf_dir):
+        with open(os.path.join(usaf_dir, usaf_fn)) as f:
+            for i,line in enumerate(f):
+                usaf_sunspot.append([line[2:8], line[33:38], line[39]])
+    usaf_sunspot = pd.DataFrame(usaf_sunspot)
 
     for index, row in sidc_csv.iterrows():
-        create_image_ground(row, fenyi_sunspot)
+        create_image_ground(row, fenyi_sunspot, usaf_sunspot)
 
 
 
 
 
-def create_image_ground(row, fenyi_sunspot):
+def create_image_ground(row, fenyi_sunspot, usaf_sunspot):
 
     row = row.to_frame().transpose()
 
@@ -253,8 +252,7 @@ def create_image_ground(row, fenyi_sunspot):
     groups = list(ws['group_number'].unique())
     time = datetime.strptime('-'.join([str(i) for i in list(dpd.iloc[0])[1:7]]), '%Y-%m-%d-%H-%M-%S')
 
-    dir = '/homeRAID/efini/dataset/ground/images'
-    dir_out = '/homeRAID/efini/dataset/ground/products'
+    dir = '/homeRAID/efini/dataset/ground/fits'
     dir_mask_out = '/homeRAID/efini/dataset/ground/masks'
 
     files = os.listdir(dir)
@@ -264,7 +262,7 @@ def create_image_ground(row, fenyi_sunspot):
         print(e)
         return
 
-    if file.split('/')[-1].split('.')[0]+'.png' in os.listdir(dir_out):
+    if file.split('/')[-1].split('.')[0]+'_mask.png' in os.listdir(dir_mask_out):
         return
     print(file)
     with fits.open(file, ignore_missing_end=True) as hdul:
@@ -289,7 +287,7 @@ def create_image_ground(row, fenyi_sunspot):
     rot_mat = cv2.getRotationMatrix2D(center,tilt,1.0)
     img = cv2.warpAffine(img, rot_mat, img.shape[::-1])
 
-    instances = np.zeros(img.shape)
+    instances = np.zeros(list(img.shape)+[3])
 
     print('Creating mask...')
     for i, row in rp.iterrows():
@@ -304,6 +302,16 @@ def create_image_ground(row, fenyi_sunspot):
         group_idx = groups.index(ws.loc[i]['group_number'])
         patch = img[p[1]-o:p[1]+o,p[0]-o:p[0]+o]
         low = np.where(patch == np.amin(patch))
+
+        group_name = ws.loc[i]['group_number']
+        new_string = ''.join(ch for ch in group_name if ch.isdigit())
+        group_class = usaf_sunspot[(usaf_sunspot[0] == time.strftime('%Y%m%d')[2:]) & (usaf_sunspot[1] == group_name)][2]
+        if group_class.empty:
+            group_class = 0
+        else:
+            group_class = group_class.iloc[0]
+            group_class = ord(group_class)
+
 
         distance = np.linalg.norm(tuple(j-k for j,k in zip(center,p)))
         cosine_amplifier = math.cos(math.radians(1) * distance / radius)
@@ -327,7 +335,8 @@ def create_image_ground(row, fenyi_sunspot):
             whole_spot.update(set(new))
 
         for c in set.intersection(whole_spot, disk_mask):
-            instances[c] = 255 - group_idx
+            instances[c][0] = 255 - group_idx
+            instances[c][1] = group_class
 
 
     half_img = int(radius)
@@ -335,15 +344,15 @@ def create_image_ground(row, fenyi_sunspot):
     top_left = (center[1]-half_img, center[0]-half_img)
     bottom_right =  (center[1]+half_img, center[0]+half_img)
 
-    img = img[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
-    img = cv2.resize(img, (4000, 4000))
+    # img = img[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
+    # img = cv2.resize(img, (4000, 4000))
 
     instances = instances[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
     instances = cv2.resize(instances, (4000, 4000), interpolation=cv2.INTER_NEAREST)
 
     out_filename = file.split('.')[0].split('/')[-1]
 
-    cv2.imwrite(os.path.join(dir_out,out_filename+'.png'), (img*(2**16-1)).astype(np.uint16))
+    # cv2.imwrite(os.path.join(dir_out,out_filename+'.png'), (img*(2**16-1)).astype(np.uint16))
     Image.fromarray(instances.astype(np.uint8)).save(os.path.join(dir_mask_out,out_filename+'_mask.png'))
 
 

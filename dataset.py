@@ -70,7 +70,6 @@ class HelioDataset(Dataset):
                                                        full_disk_mask,
                                                        ground_truth[:,:,2],
                                                        ground_truth[:,:,1])
-        print(clusters.shape)
         return {'full_disk': full_disk,
                 'full_disk_mask': full_disk_mask,
                 'full_disk_instances': ground_truth[:,:,2],

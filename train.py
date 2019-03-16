@@ -1,7 +1,6 @@
 import sys, os, cv2, random
 from optparse import OptionParser
 from torch.utils.data import DataLoader
-import numpy as np
 
 import torch
 import torch.backends.cudnn as cudnn
@@ -10,15 +9,16 @@ from torch import optim
 
 from eval import eval
 from models import UNet
-from models import SiameseHybrid
+from models import MultiTaskHybridSiamese
 
 from dataset import HelioDataset
 from loss import dice_coeff
+from utils.utils import sample_sunspot_pairs
 
 import tensorboardX
-from datetime import datetime
-
+import numpy as np
 from PIL import Image
+from datetime import datetime
 
 def train(unet,
           siamese,
@@ -29,7 +29,8 @@ def train(unet,
           save_cp=True,
           patch_size=200,
           sampling_ratio=0.2,
-          num_workers=3):
+          num_workers=3,
+          num_anchors=3):
 
     dir_checkpoint = '/homeRAID/efini/checkpoints/'
     now = datetime.now().strftime('%b%d_%H-%M-%S')
@@ -67,52 +68,43 @@ def train(unet,
             bce_loss.backward()
             optimizer.step()
 
-            # log unet stuff
+            # log
             step = (epoch-1) * len(dataset) + obs_idx
             pred_masks = (pred_masks > 0.5).float()
             dice = dice_coeff(pred_masks, true_masks).item()
-            writer.add_scalar('train-unet-bce-loss', bce_loss.item(), step)
-            writer.add_scalar('train-unet-dice-coeff', dice, step)
+            writer.add_scalar('train/unet/bce-loss', bce_loss.item(), step)
+            writer.add_scalar('train/unet/dice-coeff', dice, step)
             print('Observation', obs['date'][0], '| loss:',
                   '> bce: {:.6f} > dice {:.6f}'.format(bce_loss.item(), dice))
 
             # --- TRAIN SIAMESE --- #
-            full_disk = obs['full_disk'][0].float().to(device)
-            instances = np.array(obs['full_disk_instances'][0])
-            mask = np.array(obs['full_disk_mask'][0], dtype=np.uint8)
-
-            n, labels, stats, centers = cv2.connectedComponentsWithStats(mask)
-            true_clusters = [int(instances[labels==i][0]) for i in range(n)]
-            print(instances.dtype, np.amin(instances), np.amax(instances))
-
-
-            for i in range(1, n):
-                print(labels[i], stats[i], centers[i])
-
-            anchors = random.sample(range(1, 100), int(n * sampling_ratio) + 1)
-            for anchor in anchors:
-                # one positive example and one negative for every sunspot
-                c_id = true_clusters[i]
-                same = [s for s in range(1,ret) if true_clusters[s] == c_id]
-                other = [s for s in range(1,ret) if true_clusters[s] != c_id]
-                positive = random.sample(same, 1)[0]
-                negative = random.sample(other, 1)[0]
-
-                # input = []
-                # for j in [positive, negative]:
-                #     distance = centers[i] - centers[j]
-                #     intensity_diff = avg_intesitygram[i] - avg_intesitygram[j]
-                #     magnetic_diff = avg_magnetogram[i] - avg_magnetogram[j]
-                #     size_diff = stats[i][-1] - stats[i][-1]
-                #     row = [*distance, intensity_diff, magnetic_diff, size_diff]
-                #     input.append(row)
-
-                input = [[*data[i], *data[e]] for e in [negative, positive]]
-                gt = [[c_id == true_clusters[e]] for e in [negative, positive]]
+            features = obs['sunspot_features'][0].float()
+            clusters = obs['sunspot_clusters'][0].float()
+            classes = obs['sunspot_classes'][0].float()
+            print(clusters.shape)
+            input, gt = sample_sunspot_pairs(features, clusters, classes,
+                                             num_anchors=num_anchors)
+            anchors, others = [i.to(device) for i in input]
+            gt_sim, _, gt_class_other = [o.to(device) for o in gt]
+            pred_sim, _, pred_class_other = siamese(anchors, others)
+            sim_loss = bce(pred_sim, gt_sim)
+            class_loss = bce(pred_class_other, gt_class_other.squeeze())
+            loss = sim_loss + class_loss
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
 
 
-            siamese()
+
+            # log
+            step = (epoch-1) * len(dataset) + obs_idx
+            pred_masks = (pred_masks > 0.5).float()
+            dice = dice_coeff(pred_masks, true_masks).item()
+            writer.add_scalar('train/siamese/sim-loss', sim_loss.item(), step)
+            writer.add_scalar('train/siamese/class-loss', class_loss.item(), step)
+            print('> similarity: {:.6f} > classification {:.6f}'
+                  .format(sim_loss.item(), class_loss.item()))
 
 
         print('Epoch finished!')
@@ -150,7 +142,7 @@ def get_args():
                       default=200, help="size of each patch of the images")
     parser.add_option('-d', '--logdir', type='str', dest='logdir',
                       default='/homeRAID/efini/logs', help="log directory")
-    parser.add_option('-w', '--num-workers', dest='num_workers', default=3,
+    parser.add_option('-w', '--num-workers', dest='num_workers', default=1,
                       type='int', help='number of workers')
     parser.add_option('-s', '--sampling-ratio', dest='sampling_ratio',
                       default=0.2, type='float', help='sampling ratio')
@@ -163,7 +155,7 @@ if __name__ == '__main__':
     args = get_args()
 
     unet = UNet(n_channels=1, n_classes=1)
-    siamese = SiameseHybrid()
+    siamese = MultiTaskHybridSiamese()
 
     if args.load:
         unet.load_state_dict(torch.load(args.load))

@@ -3,8 +3,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 from torch.utils.data import Dataset, DataLoader
-from utils.utils import patchify, sample_patches
-
+from utils.utils import patchify, sample_patches, extract_features
 
 class HelioDataset(Dataset):
     def __init__(self, sidc_path, ground_dir, SDO_dir, patch_size=200,
@@ -59,19 +58,28 @@ class HelioDataset(Dataset):
     def __getitem__(self, idx):
         full_disk = cv2.imread(self.data[idx]['img_path'], -1)
         full_disk = full_disk.astype(np.float32)/ np.amax(full_disk)
-        full_disk_instances = cv2.imread(self.data[idx]['mask_path'], 0)
-        full_disk_mask = np.clip(full_disk_instances, 0, 1)
+        ground_truth = cv2.imread(self.data[idx]['mask_path'], -1)
+        full_disk_mask = np.clip(ground_truth[:,:,2], 0, 1)
         sunspot_number = self.data[idx]['sunspot_number']
         num_patches = sunspot_number // self.sunspots_per_patch
         patches, masks = patchify(full_disk, full_disk_mask,
                                   patch_size=self.patch_size,
                                   overlap=self.overlap)
         patches, masks = sample_patches(patches, masks, num_patches)
-        return {'patches': patches,
-                'masks': masks,
-                'full_disk': full_disk,
-                'full_disk_instances': full_disk_instances,
+        features, clusters, classes = extract_features(full_disk,
+                                                       full_disk_mask,
+                                                       ground_truth[:,:,2],
+                                                       ground_truth[:,:,1])
+        print(clusters.shape)
+        return {'full_disk': full_disk,
                 'full_disk_mask': full_disk_mask,
+                'full_disk_instances': ground_truth[:,:,2],
+                'full_disk_classes': ground_truth[:,:,1],
+                'patches': patches,
+                'masks': masks,
+                'sunspot_features': features,
+                'sunspot_clusters': clusters,
+                'sunspot_classes': classes,
                 'sunspot_number': sunspot_number,
                 'date': self.data[idx]['date']}
 

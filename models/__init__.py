@@ -1,2 +1,2 @@
 from .unet_model import UNet
-from .siamese_model import SiameseHybrid
+from .siamese_model import MultiTaskHybridSiamese

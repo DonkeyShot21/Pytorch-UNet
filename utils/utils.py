@@ -1,5 +1,6 @@
 import random, torch
 import numpy as np
+import math, cv2
 
 from astropy.coordinates import SkyCoord
 import astropy.units as u
@@ -53,6 +54,89 @@ def normalize_img(img):
 
 def to_uint8(img):
     return np.array(img * 255, dtype=np.uint8)
+
+def extract_features(disk, mask, in_instances, in_classes):
+    features, clusters, classes = [], [], []
+
+    n, labels, stats, centers = cv2.connectedComponentsWithStats(mask)
+    disk_area = mask.shape[0] * mask.shape[1] - stats[0][4]
+    true_clusters = [int(in_instances[labels==i][0]) for i in range(n)]
+    true_classes = np.array([int(in_classes[labels==i][0]) for i in range(n)])
+    true_classes[true_classes == 0] = random.randrange(65,72)
+    true_classes -= 65
+
+    for i in range(1,n):
+        print(i, true_clusters[i])
+        clusters.append(torch.FloatTensor([true_clusters[i]]))
+        classes.append(one_hot(true_classes[i], 8))
+        features.append(build_channels(img=disk,
+                                       stats=stats[i],
+                                       center=centers[i],
+                                       disk_area=disk_area,
+                                       output_size=(100,100)))
+
+    features = torch.stack(features)
+    classes = torch.stack(classes)
+    clusters = torch.stack(clusters)
+    return features, clusters, classes
+
+def sample_sunspot_pairs(features, clusters, classes, num_anchors):
+    anchors, others = [], []
+    similarity, anchor_classes, other_classes = [], [], []
+
+    n = len(clusters)
+    for _ in range(num_anchors):
+        anchor = random.choice(range(1, n))
+        c_id = clusters[anchor]
+        same = [s for s in range(1,n) if clusters[s] == c_id]
+        other = [o for o in range(1,n) if clusters[o] != c_id]
+        positive_id = random.choice(same)
+        negative_id = random.choice(other)
+
+        for sim, other in enumerate([negative_id, positive_id]):
+            anchors.append(features[anchor])
+            others.append(features[other])
+            similarity.append([sim])
+            anchor_classes.append(classes[anchor])
+            other_classes.append(classes[other])
+
+    anchors = torch.stack(anchors).float()
+    others = torch.stack(others).float()
+    similarity = torch.FloatTensor(similarity)
+    anchor_classes = torch.stack(anchor_classes)
+    other_classes = torch.stack(other_classes)
+
+    input = [anchors, others]
+    gt = [similarity, anchor_classes, other_classes]
+    return input, gt
+
+def build_channels(img, stats, center, disk_area, output_size):
+    patches = []
+    l, t, w, h, area = stats
+    lat, lon = px_to_latlon(center, img.shape[0] // 2)
+    patches.append(centered_patch(img, center, output_size))
+    patches.append(cv2.resize(img[l:l+w,t:t+h], output_size))
+    patches.append(np.full(output_size, area/disk_area))
+    patches.append(np.full(output_size, lat))
+    patches.append(np.full(output_size, lon))
+    return torch.stack([torch.FloatTensor(p) for p in patches])
+
+def centered_patch(img, c, output_size):
+    w, h = [s//2 for s in output_size]
+    padded = np.pad(img, ((w,w),(h,h)), mode='constant')
+    c = [int(c[0]+w), int(c[1]+h)]
+    return padded[c[0]-w:c[0]+w,c[1]-h:c[1]+h]
+
+def px_to_latlon(c, radius):
+    lat = math.acos((c[0] - radius) / radius)
+    lon = math.acos((c[1] - radius) / radius)
+    return (lat, lon)
+
+def one_hot(idx, num_classes):
+    oh = (idx == torch.arange(num_classes).reshape(1, num_classes)).float()
+    return oh
+
+
 
 # ------------------------------------------------------------------------------
 

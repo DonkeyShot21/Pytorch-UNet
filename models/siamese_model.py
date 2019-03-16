@@ -4,64 +4,74 @@ import torch
 import numpy as np
 
 
-class SiameseHybrid(nn.Module):
+class MultiTaskHybridSiamese(nn.Module):
     def __init__(self):
-        super(SiameseHybrid, self).__init__()
+        super(MultiTaskHybridSiamese, self).__init__()
         self.cnn = nn.Sequential(
-            nn.Conv2d(1, 4, kernel_size=3, stride=2),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm2d(4),
-
-            nn.Conv2d(4, 8, kernel_size=3, stride=2),
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(5, 8, kernel_size=3, stride=3),
             nn.ReLU(inplace=True),
             nn.BatchNorm2d(8),
 
+            nn.ReflectionPad2d(1),
             nn.Conv2d(8, 8, kernel_size=3, stride=2),
             nn.ReLU(inplace=True),
             nn.BatchNorm2d(8),
 
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(8, 8, kernel_size=3, stride=2),
+            nn.ReLU(inplace=True),
+            nn.BatchNorm2d(8),
+
+            nn.ReflectionPad2d(1),
             nn.Conv2d(8, 8, kernel_size=3, stride=2),
             nn.ReLU(inplace=True),
             nn.BatchNorm2d(8),
         )
 
-        self.fc1 = nn.Sequential(
+        self.fc_sim = nn.Sequential(
             nn.Linear(200, 200),
             nn.ReLU(inplace=True),
 
+            nn.Linear(200, 100),
+            nn.ReLU(inplace=True),
+
+            nn.Linear(100, 1)
+        )
+
+        self.fc_class = nn.Sequential(
             nn.Linear(200, 200),
             nn.ReLU(inplace=True),
 
-            nn.Linear(200, 8)
-        )
-
-        self.fc2 = nn.Sequential(
-            nn.Linear(10, 10),
+            nn.Linear(200, 100),
             nn.ReLU(inplace=True),
 
-            nn.Linear(10, 10),
-            nn.ReLU(inplace=True),
-
-            nn.Linear(10, 1)
+            nn.Linear(100, 8)
         )
 
-    def extract_features(self, x):
-        output = self.cnn(x)
-        return output.view(output.size()[0], -1)
+    def embed(self, input):
+        out = self.cnn(input)
+        return out.view(out.size()[0], -1)
 
-    def similarity(self, fc1_in, distance):
-        fc1_out = self.fc1(fc1_in)
-        fc2_out = self.fc2(torch.cat((fc1_out, distance), 1))
-        return torch.sigmoid(fc2_out)
+    def similarity(self, e1, e2):
+        out = self.fc_sim(e1 - e2)
+        return torch.sigmoid(out)
 
-    def forward(self, in1, in2, distance):
-        sim_in = self.extract_features(in1) - self.extract_features(in2)
-        return self.similarity(sim_in, distance)
+    def classify(self, e):
+        out = self.fc_class(e)
+        return torch.sigmoid(out)
+
+    def forward(self, in1, in2):
+        e1 = self.embed(in1)
+        e2 = self.embed(in2)
+        sim = self.similarity(e1, e2)
+        c1 = self.classify(e1)
+        c2 = self.classify(e2)
+        return sim, c1, c2
 
 
 if __name__ == '__main__':
-    in1 = FloatTensor(np.ones((1,1,100,100), dtype=np.float32))
-    in2 = FloatTensor(np.ones((1,1,100,100), dtype=np.float32))
-    distance = FloatTensor(np.ones((1,2)))
-    sh = SiameseHybrid()
-    print(sh.forward(in1,in2,distance))
+    in1 = FloatTensor(np.ones((1,5,100,100), dtype=np.float32))
+    in2 = FloatTensor(np.ones((1,5,100,100), dtype=np.float32))
+    sh = MultiTaskHybridSiamese()
+    print(sh.forward(in1,in2))

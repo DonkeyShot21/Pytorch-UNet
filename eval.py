@@ -57,8 +57,8 @@ def eval(net, device, patch_size, num_workers, writer, epoch,
         val_loss['dice'] +=  obs_loss['dice']
 
     val_loss.update({k:v/len(val_dataset) for k,v in val_loss.items()})
-    writer.add_scalar('val-bce-loss', val_loss['bce'], epoch)
-    writer.add_scalar('val-dice-coeff', val_loss['dice'], epoch)
+    writer.add_scalar('val/bce-loss', val_loss['bce'], epoch)
+    writer.add_scalar('val/dice-coeff', val_loss['dice'], epoch)
     viz = Tensor(viz).permute(0,3,1,2)
     grid = vutils.make_grid(viz, normalize=True)
     writer.add_image('val-viz', grid, epoch)

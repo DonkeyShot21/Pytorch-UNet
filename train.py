@@ -26,7 +26,8 @@ def train(unet,
           logdir,
           device,
           epochs=5,
-          lr=0.001,
+          unet_lr=0.001,
+          siamese_lr=0.0001,
           save_cp=True,
           patch_size=200,
           sampling_ratio=0.2,
@@ -46,9 +47,13 @@ def train(unet,
                             num_workers=num_workers,
                             shuffle=True)
 
-    params = list(unet.parameters()) + list(siamese.parameters())
-    optimizer = optim.Adam(params,
-                           lr=lr)
+    unet_optimizer = optim.SGD(unet.parameters(),
+                               lr=unet_lr,
+                               momentum=0.9,
+                               weight_decay=0.0005)
+    siamese_optimizer = optim.Adam(siamese.parameters(),
+                                   lr=siamese_lr)
+
     bce = nn.BCELoss()
 
     for epoch in range(1,epochs+1):
@@ -64,9 +69,9 @@ def train(unet,
             pred_masks_flat = pred_masks.view(-1)
             true_masks_flat = true_masks.view(-1)
             bce_loss = bce(pred_masks_flat, true_masks_flat)
-            optimizer.zero_grad()
+            unet_optimizer.zero_grad()
             bce_loss.backward()
-            optimizer.step()
+            unet_optimizer.step()
 
             # log
             step = (epoch-1) * len(dataset) + obs_idx
@@ -89,9 +94,9 @@ def train(unet,
             sim_loss = bce(pred_sim, gt_similarity)
             class_loss = bce(pred_class_others, gt_class_others.squeeze())
             loss = sim_loss + class_loss
-            optimizer.zero_grad()
+            siamese_optimizer.zero_grad()
             loss.backward()
-            optimizer.step()
+            siamese_optimizer.step()
 
             # log
             step = (epoch-1) * len(dataset) + obs_idx
@@ -126,8 +131,10 @@ def get_args():
     parser = OptionParser()
     parser.add_option('-e', '--epochs', dest='epochs', default=10, type='int',
                       help='number of epochs')
-    parser.add_option('-l', '--learning-rate', dest='lr', default=0.001,
-                      type='float', help='learning rate')
+    parser.add_option('-l', '--unet-lr', dest='unet_lr', default=0.001,
+                      type='float', help='unet learning rate')
+    parser.add_option('-r', '--siamese-lr', dest='siamese_lr', default=0.0001,
+                      type='float', help='siamese learning rate')
     parser.add_option('-g', '--gpu', action='store_true', dest='gpu',
                       default=False, help='use cuda')
     parser.add_option('-c', '--load', dest='load',
@@ -168,7 +175,8 @@ if __name__ == '__main__':
               siamese=siamese,
               logdir=args.logdir,
               epochs=args.epochs,
-              lr=args.lr,
+              unet_lr=args.unet_lr,
+              siamese_lr=args.siamese_lr,
               patch_size=args.patch_size,
               num_workers=args.num_workers,
               device=device)

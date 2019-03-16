@@ -61,7 +61,7 @@ def sample_sunspot_pairs(disk, mask, instances, classes, num_anchors):
 
     tmp = np.ma.masked_where(mask == 0, instances)
     if np.amin(tmp) > 254:
-        return [None, None], [None, None, None]
+        return [-1, -1], [-1, -1, -1]
 
 
     n, labels, stats, centers = cv2.connectedComponentsWithStats(mask)

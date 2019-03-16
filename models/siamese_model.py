@@ -71,7 +71,7 @@ class MultiTaskHybridSiamese(nn.Module):
 
 
 if __name__ == '__main__':
-    in1 = FloatTensor(np.ones((1,5,100,100), dtype=np.float32))
-    in2 = FloatTensor(np.ones((1,5,100,100), dtype=np.float32))
+    in1 = torch.rand(1,5,100,100)
+    in2 = torch.rand(1,5,100,100)
     sh = MultiTaskHybridSiamese()
     print(sh.forward(in1,in2))

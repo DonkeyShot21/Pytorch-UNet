@@ -41,15 +41,14 @@ def train(unet,
                            '/homeRAID/efini/dataset/ground/train',
                            '/homeRAID/efini/dataset/SDO/train',
                            patch_size=patch_size)
-    dataloader = nc.SafeDataLoader(nc.SafeDataset(dataset),
+    dataloader = DataLoader(nc.SafeDataset(dataset),
                             batch_size=1,
                             num_workers=num_workers,
                             shuffle=True)
 
-    optimizer = optim.SGD(unet.parameters(),
-                          lr=lr,
-                          momentum=0.9,
-                          weight_decay=0.0005)
+    params = list(unet.parameters()) + list(siamese.parameters())
+    optimizer = optim.Adam(params,
+                           lr=lr)
     bce = nn.BCELoss()
 
     for epoch in range(1,epochs+1):

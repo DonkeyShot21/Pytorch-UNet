@@ -55,14 +55,14 @@ def normalize_img(img):
 def to_uint8(img):
     return np.array(img * 255, dtype=np.uint8)
 
-def sample_sunspot_pairs(disk, mask, in_instances, in_classes, num_anchors):
+def sample_sunspot_pairs(disk, mask, instances, classes, num_anchors):
     anchors, others = [], []
     similarity, anchor_classes, other_classes = [], [], []
 
     n, labels, stats, centers = cv2.connectedComponentsWithStats(mask)
     disk_area = mask.shape[0] * mask.shape[1] - stats[0][4]
-    true_clusters = [int(in_instances[labels==i][0]) for i in range(n)]
-    true_classes = np.array([int(in_classes[labels==i][0]) for i in range(n)])
+    true_clusters = [int(instances[labels==i][0]) for i in range(n)]
+    true_classes = np.array([int(classes[labels==i][0]) for i in range(n)])
     true_classes[true_classes == 0] = random.randrange(65,72)
     true_classes -= 65
 

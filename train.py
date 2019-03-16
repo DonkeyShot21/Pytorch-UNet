@@ -6,7 +6,7 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 from torch import optim
-import nonechucks as nc
+# import nonechucks as nc
 
 from eval import eval
 from models import UNet
@@ -41,10 +41,10 @@ def train(unet,
                            '/homeRAID/efini/dataset/ground/train',
                            '/homeRAID/efini/dataset/SDO/train',
                            patch_size=patch_size)
-    dataloader = nc.SafeDataLoader(nc.SafeDataset(dataset),
-                                   batch_size=1,
-                                   num_workers=num_workers,
-                                   shuffle=True)
+    dataloader = DataLoader(dataset,
+                            batch_size=1,
+                            num_workers=num_workers,
+                            shuffle=True)
 
     optimizer = optim.SGD(unet.parameters(),
                           lr=lr,
@@ -84,6 +84,7 @@ def train(unet,
             gt_class_others =  obs['class_others'][0].float().to(device)
             gt_similarity = obs['similarity'][0].float().to(device)
             pred_sim, _, pred_class_others = siamese(anchors, others)
+            print(anchors.shape, others.shape)
             sim_loss = bce(pred_sim, gt_similarity)
             class_loss = bce(pred_class_others, gt_class_others.squeeze())
             loss = sim_loss + class_loss
@@ -104,7 +105,7 @@ def train(unet,
         print('Epoch finished!')
 
         if 1:
-            eval(net,
+            eval(unet,
                  device,
                  patch_size=patch_size,
                  num_workers=num_workers,

@@ -66,7 +66,6 @@ def extract_features(disk, mask, in_instances, in_classes):
     true_classes -= 65
 
     for i in range(1,n):
-        print(i, true_clusters[i])
         clusters.append(torch.FloatTensor([true_clusters[i]]))
         classes.append(one_hot(true_classes[i], 8))
         features.append(build_channels(img=disk,

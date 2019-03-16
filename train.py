@@ -26,8 +26,8 @@ def train(unet,
           logdir,
           device,
           epochs=5,
-          unet_lr=0.001,
-          siamese_lr=0.0001,
+          unet_lr=0.01,
+          siamese_lr=0.001,
           save_cp=True,
           patch_size=200,
           sampling_ratio=0.2,
@@ -93,7 +93,7 @@ def train(unet,
             pred_sim, _, pred_class_others = siamese(anchors, others)
             sim_loss = bce(pred_sim, gt_similarity)
             class_loss = bce(pred_class_others, gt_class_others.squeeze())
-            loss = sim_loss + class_loss
+            loss = sim_loss # + class_loss
             siamese_optimizer.zero_grad()
             loss.backward()
             siamese_optimizer.step()

@@ -58,6 +58,9 @@ def train(unet,
         print('Starting epoch {}/{}.'.format(epoch, epochs))
         for obs_idx, obs in enumerate(dataloader):
 
+            if obs is None:
+                continue
+
             # --- TRAIN UNET --- #
             patches = obs['patches'][0].float().to(device)
             true_masks = obs['masks'][0].float().to(device)
@@ -77,6 +80,9 @@ def train(unet,
             writer.add_scalar('train/unet/dice-coeff', dice, step)
             print('Observation', obs['date'][0], '| loss:',
                   '> bce: {:.6f} > dice {:.6f}'.format(bce_loss.item(), dice))
+
+            if obs['anchors'] is None:
+                continue
 
             # --- TRAIN SIAMESE --- #
             anchors = obs['anchors'][0].float().to(device)

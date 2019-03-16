@@ -76,7 +76,6 @@ class HelioDataset(Dataset):
                                                          ground_truth[:,:,2],
                                                          ground_truth[:,:,1],
                                                          num_anchors=1)
-        print('done with loading')
         return {'full_disk': full_disk,
                 'full_disk_mask': full_disk_mask,
                 'full_disk_instances': ground_truth[:,:,2],

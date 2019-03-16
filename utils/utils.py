@@ -59,6 +59,11 @@ def sample_sunspot_pairs(disk, mask, instances, classes, num_anchors):
     anchors, others = [], []
     similarity, anchor_classes, other_classes = [], [], []
 
+    tmp = np.ma.masked_where(mask == 0, instances)
+    if np.amin(tmp) > 254:
+        return [None, None], [None, None, None]
+
+
     n, labels, stats, centers = cv2.connectedComponentsWithStats(mask)
     disk_area = mask.shape[0] * mask.shape[1] - stats[0][4]
     true_clusters = [int(instances[labels==i][0]) for i in range(n)]

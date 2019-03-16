@@ -52,6 +52,16 @@ def train(unet,
     bce = nn.BCELoss()
 
     for epoch in range(1,epochs+1):
+
+        if 1:
+            eval(unet,
+                 device,
+                 patch_size=patch_size,
+                 num_workers=num_workers,
+                 epoch=epoch,
+                 writer=writer,
+                 num_viz=3)
+
         unet.train()
         siamese.train()
         print('Starting epoch {}/{}.'.format(epoch, epochs))
@@ -81,7 +91,6 @@ def train(unet,
             features = obs['sunspot_features'][0].float()
             clusters = obs['sunspot_clusters'][0].float()
             classes = obs['sunspot_classes'][0].float()
-            print(clusters.shape)
             input, gt = sample_sunspot_pairs(features, clusters, classes,
                                              num_anchors=num_anchors)
             anchors, others = [i.to(device) for i in input]
@@ -93,9 +102,6 @@ def train(unet,
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
-
-
 
             # log
             step = (epoch-1) * len(dataset) + obs_idx
@@ -136,8 +142,6 @@ def get_args():
                       default=False, help='use cuda')
     parser.add_option('-c', '--load', dest='load',
                       default=False, help='load file model')
-    parser.add_option('-z', '--epoch-size', dest='epoch', type='int',
-                      default=10, help=' of the epochs')
     parser.add_option('-p', '--patch-size', type='int', dest='patch_size',
                       default=200, help="size of each patch of the images")
     parser.add_option('-d', '--logdir', type='str', dest='logdir',

@@ -38,9 +38,12 @@ def eval(net, device, patch_size, num_workers, writer, epoch,
         pred_masks_flat = pred_masks.view(-1)
         true_masks_flat = true_masks.view(-1)
         bce_loss = bce(pred_masks_flat, true_masks_flat)
-        obs_loss['bce'] += bce_loss.item()
         pred_masks = (pred_masks > 0.5).float()
-        obs_loss['dice'] += dice_coeff(pred_masks, true_masks).item()
+        dice = dice_coeff(pred_masks, true_masks).item()
+        val_loss['bce'] += obs_loss['bce']
+        val_loss['dice'] +=  obs_loss['dice']
+        print('Observation', obs['date'][0], '| validation loss:',
+              '> bce: {:.6f} > dice {:.6f}'.format(bce_loss.item(), dice))
 
         if obs_idx < num_viz:
             patches_np = to_uint8(np.array(patches.cpu()))
@@ -51,10 +54,6 @@ def eval(net, device, patch_size, num_workers, writer, epoch,
                                for i in range(len(patches))])
             viz.extend(plots.reshape(2*len(patches),*plots.shape[2:]))
 
-        print('Observation', obs['date'][0], '| validation loss:',
-              *['> {}: {:.6f}'.format(k,v) for k,v in obs_loss.items()])
-        val_loss['bce'] += obs_loss['bce']
-        val_loss['dice'] +=  obs_loss['dice']
 
     val_loss.update({k:v/len(val_dataset) for k,v in val_loss.items()})
     writer.add_scalar('val/bce-loss', val_loss['bce'], epoch)
@@ -63,8 +62,7 @@ def eval(net, device, patch_size, num_workers, writer, epoch,
     grid = vutils.make_grid(viz, normalize=True)
     writer.add_image('val-viz', grid, epoch)
 
-    print('Average validation loss:',
-         *['> {}: {:.6f}'.format(k,v) for k,v in val_loss.items()])
+    print('Average validation loss:', *['> {}: {:.6f}'.format(k,v) for k,v in val_loss.items()])
 
     return
 

@@ -14,43 +14,33 @@ class MultiTaskHybridSiamese(nn.Module):
             nn.BatchNorm2d(8),
 
             nn.ReflectionPad2d(1),
-            nn.Conv2d(8, 8, kernel_size=3, stride=2),
+            nn.Conv2d(8, 8, kernel_size=3, stride=3),
             nn.ReLU(inplace=True),
             nn.BatchNorm2d(8),
 
             nn.ReflectionPad2d(1),
-            nn.Conv2d(8, 8, kernel_size=3, stride=2),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm2d(8),
-
-            nn.ReflectionPad2d(1),
-            nn.Conv2d(8, 8, kernel_size=3, stride=2),
+            nn.Conv2d(8, 8, kernel_size=3, stride=3),
             nn.ReLU(inplace=True),
             nn.BatchNorm2d(8),
         )
 
         self.fc_sim = nn.Sequential(
-            nn.Linear(200, 200),
+            nn.Linear(128, 64),
             nn.ReLU(inplace=True),
 
-            nn.Linear(200, 100),
-            nn.ReLU(inplace=True),
-
-            nn.Linear(100, 1)
+            nn.Linear(64, 1)
         )
 
         self.fc_class = nn.Sequential(
-            nn.Linear(200, 200),
+            nn.Linear(128, 64),
             nn.ReLU(inplace=True),
 
-            nn.Linear(200, 100),
-            nn.ReLU(inplace=True),
-
-            nn.Linear(100, 8)
+            nn.Linear(64, 8)
         )
 
     def embed(self, input):
         out = self.cnn(input)
+        print(out.shape)
         return out.view(out.size()[0], -1)
 
     def similarity(self, e1, e2):

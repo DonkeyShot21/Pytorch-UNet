@@ -62,7 +62,7 @@ class HelioDataset(Dataset):
             ground_truth = cv2.imread(self.data[idx]['mask_path'], -1)
             full_disk_mask = np.clip(ground_truth[:,:,2], 0, 1)
         except:
-            print('Error on image', data[idx][img_path])
+            print('Error on image', self.data[idx]['img_path'])
             return None
 
         sunspot_number = self.data[idx]['sunspot_number']

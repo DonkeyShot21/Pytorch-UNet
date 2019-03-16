@@ -55,8 +55,9 @@ def normalize_img(img):
 def to_uint8(img):
     return np.array(img * 255, dtype=np.uint8)
 
-def extract_features(disk, mask, in_instances, in_classes):
-    features, clusters, classes = [], [], []
+def sample_sunspot_pairs(disk, mask, in_instances, in_classes, num_anchors):
+    anchors, others = [], []
+    similarity, anchor_classes, other_classes = [], [], []
 
     n, labels, stats, centers = cv2.connectedComponentsWithStats(mask)
     disk_area = mask.shape[0] * mask.shape[1] - stats[0][4]
@@ -65,39 +66,30 @@ def extract_features(disk, mask, in_instances, in_classes):
     true_classes[true_classes == 0] = random.randrange(65,72)
     true_classes -= 65
 
-    for i in range(1,n):
-        clusters.append(torch.FloatTensor([true_clusters[i]]))
-        classes.append(one_hot(true_classes[i], 8))
-        features.append(build_channels(img=disk,
-                                       stats=stats[i],
-                                       center=centers[i],
-                                       disk_area=disk_area,
-                                       output_size=(100,100)))
-
-    features = torch.stack(features)
-    classes = torch.stack(classes)
-    clusters = torch.stack(clusters)
-    return features, clusters, classes
-
-def sample_sunspot_pairs(features, clusters, classes, num_anchors):
-    anchors, others = [], []
-    similarity, anchor_classes, other_classes = [], [], []
-
-    n = len(clusters)
     for _ in range(num_anchors):
         anchor = random.choice(range(1, n))
-        c_id = clusters[anchor]
-        same = [s for s in range(1,n) if clusters[s] == c_id]
-        other = [o for o in range(1,n) if clusters[o] != c_id]
+        c_id = true_clusters[anchor]
+        same = [s for s in range(1,n) if true_clusters[s] == c_id]
+        other = [o for o in range(1,n) if true_clusters[o] != c_id]
         positive_id = random.choice(same)
         negative_id = random.choice(other)
+        anchor_features = build_channels(img=disk,
+                                         stats=stats[anchor],
+                                         center=centers[anchor],
+                                         disk_area=disk_area,
+                                         output_size=(100,100))
 
         for sim, other in enumerate([negative_id, positive_id]):
-            anchors.append(features[anchor])
-            others.append(features[other])
+            anchors.append(anchor_features)
+            others.append(build_channels(img=disk,
+                                          stats=stats[anchor],
+                                          center=centers[anchor],
+                                          disk_area=disk_area,
+                                          output_size=(100,100)))
             similarity.append([sim])
-            anchor_classes.append(classes[anchor])
-            other_classes.append(classes[other])
+            anchor_classes.append(one_hot(true_classes[anchor], 8))
+            other_classes.append(one_hot(true_classes[other], 8))
+
 
     anchors = torch.stack(anchors).float()
     others = torch.stack(others).float()

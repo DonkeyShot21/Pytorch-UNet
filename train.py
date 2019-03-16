@@ -6,6 +6,7 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 from torch import optim
+import nonechucks as nc
 
 from eval import eval
 from models import UNet
@@ -40,10 +41,10 @@ def train(unet,
                            '/homeRAID/efini/dataset/ground/train',
                            '/homeRAID/efini/dataset/SDO/train',
                            patch_size=patch_size)
-    dataloader = DataLoader(dataset,
-                            batch_size=1,
-                            num_workers=num_workers,
-                            shuffle=True)
+    dataloader = nc.SafeDataLoader(nc.SafeDataset(dataset),
+                                   batch_size=1,
+                                   num_workers=num_workers,
+                                   shuffle=True)
 
     optimizer = optim.SGD(unet.parameters(),
                           lr=lr,
@@ -78,16 +79,13 @@ def train(unet,
                   '> bce: {:.6f} > dice {:.6f}'.format(bce_loss.item(), dice))
 
             # --- TRAIN SIAMESE --- #
-            features = obs['sunspot_features'][0].float()
-            clusters = obs['sunspot_clusters'][0].float()
-            classes = obs['sunspot_classes'][0].float()
-            input, gt = sample_sunspot_pairs(features, clusters, classes,
-                                             num_anchors=num_anchors)
-            anchors, others = [i.to(device) for i in input]
-            gt_sim, _, gt_class_other = [o.to(device) for o in gt]
-            pred_sim, _, pred_class_other = siamese(anchors, others)
-            sim_loss = bce(pred_sim, gt_sim)
-            class_loss = bce(pred_class_other, gt_class_other.squeeze())
+            anchors = obs['anchors'][0].float().to(device)
+            others = obs['others'][0].float().to(device)
+            gt_class_others =  obs['class_others'][0].float().to(device)
+            gt_similarity = obs['similarity'][0].float().to(device)
+            pred_sim, _, pred_class_others = siamese(anchors, others)
+            sim_loss = bce(pred_sim, gt_similarity)
+            class_loss = bce(pred_class_others, gt_class_others.squeeze())
             loss = sim_loss + class_loss
             optimizer.zero_grad()
             loss.backward()

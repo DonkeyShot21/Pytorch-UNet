@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 from torch.utils.data import Dataset, DataLoader
-from utils.utils import patchify, sample_patches, extract_features
+from utils.utils import patchify, sample_patches, sample_sunspot_pairs
 
 class HelioDataset(Dataset):
     def __init__(self, sidc_path, ground_dir, SDO_dir, patch_size=200,
@@ -56,29 +56,36 @@ class HelioDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        full_disk = cv2.imread(self.data[idx]['img_path'], -1)
-        full_disk = full_disk.astype(np.float32)/ np.amax(full_disk)
-        ground_truth = cv2.imread(self.data[idx]['mask_path'], -1)
-        full_disk_mask = np.clip(ground_truth[:,:,2], 0, 1)
+        try:
+            full_disk = cv2.imread(self.data[idx]['img_path'], -1)
+            full_disk = full_disk.astype(np.float32)/ np.amax(full_disk)
+            ground_truth = cv2.imread(self.data[idx]['mask_path'], -1)
+            full_disk_mask = np.clip(ground_truth[:,:,2], 0, 1)
+        except:
+            print('Error on image', data[idx][img_path])
+            return None
+        
         sunspot_number = self.data[idx]['sunspot_number']
         num_patches = sunspot_number // self.sunspots_per_patch
         patches, masks = patchify(full_disk, full_disk_mask,
                                   patch_size=self.patch_size,
                                   overlap=self.overlap)
         patches, masks = sample_patches(patches, masks, num_patches)
-        features, clusters, classes = extract_features(full_disk,
-                                                       full_disk_mask,
-                                                       ground_truth[:,:,2],
-                                                       ground_truth[:,:,1])
+        siamese_input, siamese_gt = sample_sunspot_pairs(full_disk,
+                                                         full_disk_mask,
+                                                         ground_truth[:,:,2],
+                                                         ground_truth[:,:,1],
+                                                         num_anchors=1)
         return {'full_disk': full_disk,
                 'full_disk_mask': full_disk_mask,
                 'full_disk_instances': ground_truth[:,:,2],
                 'full_disk_classes': ground_truth[:,:,1],
                 'patches': patches,
                 'masks': masks,
-                'sunspot_features': features,
-                'sunspot_clusters': clusters,
-                'sunspot_classes': classes,
+                'anchors': siamese_input[0],
+                'others': siamese_input[1],
+                'class_others': siamese_gt[2],
+                'similarity': siamese_gt[0],
                 'sunspot_number': sunspot_number,
                 'date': self.data[idx]['date']}
 

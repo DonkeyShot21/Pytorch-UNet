@@ -10,10 +10,10 @@ import nonechucks as nc
 
 from eval import eval
 from models import UNet
-from models import MultiTaskHybridSiamese
+from models import MultiTaskSiamese
 
 from dataset import HelioDataset
-from loss import dice_coeff
+from loss import dice_coeff, ContrastiveLoss
 from utils.utils import sample_sunspot_pairs
 
 import tensorboardX
@@ -27,7 +27,7 @@ def train(unet,
           device,
           epochs=5,
           unet_lr=0.01,
-          siamese_lr=0.01,
+          siamese_lr=0.001,
           save_cp=True,
           patch_size=200,
           sampling_ratio=0.2,
@@ -55,6 +55,7 @@ def train(unet,
                                    lr=siamese_lr)
 
     bce = nn.BCELoss()
+    contrastive = ContrastiveLoss()
 
     for epoch in range(1,epochs+1):
         unet.train()
@@ -73,15 +74,7 @@ def train(unet,
             bce_loss.backward()
             unet_optimizer.step()
 
-            # log
-            step = (epoch-1) * len(dataset) + obs_idx
-            pred_masks = (pred_masks > 0.5).float()
-            dice = dice_coeff(pred_masks, true_masks).item()
-            writer.add_scalar('train/unet/bce-loss', bce_loss.item(), step)
-            writer.add_scalar('train/unet/dice-coeff', dice, step)
-            print('Observation', obs['date'][0], '| loss:',
-                  '> bce: {:.6f} > dice {:.6f}'.format(bce_loss.item(), dice))
-
+            # check if the observation can be used to train the siamese
             if len(obs['anchors'].shape) < 2:
                 continue
 
@@ -90,10 +83,10 @@ def train(unet,
             others = obs['others'][0].float().to(device)
             gt_class_others =  obs['class_others'][0].float().to(device)
             gt_similarity = obs['similarity'][0].float().to(device)
-            pred_sim, _, pred_class_others = siamese(anchors, others)
-            sim_loss = bce(pred_sim, gt_similarity)
+            anchor_emb, other_emb, _, pred_class_others = siamese(anchors, others)
+            contrastive_loss = contrastive(anchor_emb, other_emb, gt_similarity)
             class_loss = bce(pred_class_others, gt_class_others.squeeze())
-            loss = sim_loss # + class_loss
+            loss = 0.8 * contrastive_loss + 0.2 * class_loss
             siamese_optimizer.zero_grad()
             loss.backward()
             siamese_optimizer.step()
@@ -102,10 +95,15 @@ def train(unet,
             step = (epoch-1) * len(dataset) + obs_idx
             pred_masks = (pred_masks > 0.5).float()
             dice = dice_coeff(pred_masks, true_masks).item()
-            writer.add_scalar('train/siamese/sim-loss', sim_loss.item(), step)
+            writer.add_scalar('train/unet/bce-loss', bce_loss.item(), step)
+            writer.add_scalar('train/unet/dice-coeff', dice, step)
+            writer.add_scalar('train/siamese/contrastive-loss', contrastive_loss.item(), step)
             writer.add_scalar('train/siamese/class-loss', class_loss.item(), step)
-            print('> similarity: {:.6f} > classification {:.6f}'
-                  .format(sim_loss.item(), class_loss.item()))
+
+            print('Observation', obs['date'][0], '| loss:',
+                  '> bce: {:.6f} > dice {:.6f}'.format(bce_loss.item(), dice),
+                  '> contrastive: {:.6f} > classification {:.6f}'
+                  .format(contrastive_loss.item(), class_loss.item()))
 
 
         print('Epoch finished!')
@@ -131,9 +129,9 @@ def get_args():
     parser = OptionParser()
     parser.add_option('-e', '--epochs', dest='epochs', default=10, type='int',
                       help='number of epochs')
-    parser.add_option('-l', '--unet-lr', dest='unet_lr', default=0.001,
+    parser.add_option('-l', '--unet-lr', dest='unet_lr', default=0.01,
                       type='float', help='unet learning rate')
-    parser.add_option('-r', '--siamese-lr', dest='siamese_lr', default=0.0001,
+    parser.add_option('-r', '--siamese-lr', dest='siamese_lr', default=0.001,
                       type='float', help='siamese learning rate')
     parser.add_option('-g', '--gpu', action='store_true', dest='gpu',
                       default=False, help='use cuda')
@@ -156,7 +154,7 @@ if __name__ == '__main__':
     args = get_args()
 
     unet = UNet(n_channels=1, n_classes=1)
-    siamese = MultiTaskHybridSiamese()
+    siamese = MultiTaskSiamese()
 
     if args.load:
         unet.load_state_dict(torch.load(args.load))

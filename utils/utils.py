@@ -1,6 +1,7 @@
 import random, torch
 import numpy as np
 import math, cv2
+from PIL import Image
 
 from astropy.coordinates import SkyCoord
 import astropy.units as u
@@ -86,8 +87,8 @@ def sample_sunspot_pairs(disk, mask, instances, classes, num_anchors):
         for sim, other in enumerate([negative_id, positive_id]):
             anchors.append(anchor_features)
             others.append(build_channels(img=disk,
-                                          stats=stats[anchor],
-                                          center=centers[anchor],
+                                          stats=stats[other],
+                                          center=centers[other],
                                           disk_area=disk_area,
                                           output_size=(100,100)))
             similarity.append([sim])
@@ -107,10 +108,10 @@ def sample_sunspot_pairs(disk, mask, instances, classes, num_anchors):
 
 def build_channels(img, stats, center, disk_area, output_size):
     patches = []
-    l, t, w, h, area = stats
+    center = center[::-1]
+    area = stats[-1]
     lat, lon = px_to_latlon(center, img.shape[0] // 2)
     patches.append(centered_patch(img, center, output_size))
-    patches.append(cv2.resize(img[l:l+w,t:t+h], output_size))
     patches.append(np.full(output_size, area/disk_area))
     patches.append(np.full(output_size, lat))
     patches.append(np.full(output_size, lon))

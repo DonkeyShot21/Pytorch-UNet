@@ -10,7 +10,7 @@ import nonechucks as nc
 
 from eval import eval
 from models import UNet
-from models import MultiTaskSiamese
+from models import MultiTaskHybridSiamese
 
 from dataset import HelioDataset
 from loss import dice_coeff, ContrastiveLoss
@@ -55,7 +55,6 @@ def train(unet,
                                    lr=siamese_lr)
 
     bce = nn.BCELoss()
-    contrastive = ContrastiveLoss()
 
     for epoch in range(1,epochs+1):
         unet.train()
@@ -83,10 +82,10 @@ def train(unet,
             others = obs['others'][0].float().to(device)
             gt_class_others =  obs['class_others'][0].float().to(device)
             gt_similarity = obs['similarity'][0].float().to(device)
-            anchor_emb, other_emb, _, pred_class_others = siamese(anchors, others)
-            contrastive_loss = contrastive(anchor_emb, other_emb, gt_similarity)
+            pred_sim, _, pred_class_others = siamese(anchors, others)
+            sim_loss = bce(pred_sim, gt_similarity)
             class_loss = bce(pred_class_others, gt_class_others.squeeze())
-            loss = 0.8 * contrastive_loss + 0.2 * class_loss
+            loss = 0.8 * sim_loss + 0.2 * class_loss
             siamese_optimizer.zero_grad()
             loss.backward()
             siamese_optimizer.step()
@@ -97,13 +96,13 @@ def train(unet,
             dice = dice_coeff(pred_masks, true_masks).item()
             writer.add_scalar('train/unet/bce-loss', bce_loss.item(), step)
             writer.add_scalar('train/unet/dice-coeff', dice, step)
-            writer.add_scalar('train/siamese/contrastive-loss', contrastive_loss.item(), step)
+            writer.add_scalar('train/siamese/similarity-loss', sim_loss.item(), step)
             writer.add_scalar('train/siamese/class-loss', class_loss.item(), step)
 
             print('Observation', obs['date'][0], '| loss:',
                   '> bce: {:.6f} > dice {:.6f}'.format(bce_loss.item(), dice),
-                  '> contrastive: {:.6f} > classification {:.6f}'
-                  .format(contrastive_loss.item(), class_loss.item()))
+                  '> simlarity: {:.6f} > classification {:.6f}'
+                  .format(sim_loss.item(), class_loss.item()))
 
 
         print('Epoch finished!')
@@ -154,7 +153,7 @@ if __name__ == '__main__':
     args = get_args()
 
     unet = UNet(n_channels=1, n_classes=1)
-    siamese = MultiTaskSiamese()
+    siamese = MultiTaskHybridSiamese()
 
     if args.load:
         unet.load_state_dict(torch.load(args.load))

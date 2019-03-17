@@ -66,7 +66,7 @@ class MultiTaskHybridSiamese(nn.Module):
         super(MultiTaskHybridSiamese, self).__init__()
         self.cnn = nn.Sequential(
             nn.ReflectionPad2d(1),
-            nn.Conv2d(5, 8, kernel_size=3, stride=3),
+            nn.Conv2d(4, 8, kernel_size=3, stride=3),
             nn.ReLU(inplace=True),
             nn.BatchNorm2d(8),
 
@@ -77,27 +77,22 @@ class MultiTaskHybridSiamese(nn.Module):
 
             nn.ReflectionPad2d(1),
             nn.Conv2d(8, 8, kernel_size=3, stride=3),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm2d(8),
-
-            nn.ReflectionPad2d(1),
-            nn.Conv2d(8, 8, kernel_size=3, stride=2),
             nn.ReLU(inplace=True),
             nn.BatchNorm2d(8),
         )
 
         self.fc_sim = nn.Sequential(
-            nn.Linear(64, 32),
+            nn.Linear(128, 64),
             nn.ReLU(inplace=True),
 
-            nn.Linear(32, 1)
+            nn.Linear(64, 1)
         )
 
         self.fc_class = nn.Sequential(
-            nn.Linear(32, 32),
+            nn.Linear(128, 64),
             nn.ReLU(inplace=True),
 
-            nn.Linear(32, 8)
+            nn.Linear(64, 8)
         )
 
     def embed(self, input):
@@ -105,7 +100,7 @@ class MultiTaskHybridSiamese(nn.Module):
         return out.view(out.size()[0], -1)
 
     def similarity(self, e1, e2):
-        out = self.fc_sim(torch.cat((e1, e2), 1))
+        out = self.fc_sim(e1 - e2)
         return torch.sigmoid(out)
 
     def classify(self, e):

@@ -9,8 +9,7 @@ import torchvision.utils as vutils
 from torch import Tensor
 import numpy as np
 from PIL import Image
-
-
+import nonechucks as nc
 
 
 def eval(net, device, patch_size, num_workers, writer, epoch,
@@ -23,7 +22,7 @@ def eval(net, device, patch_size, num_workers, writer, epoch,
                                '/homeRAID/efini/dataset/ground/validation',
                                '/homeRAID/efini/dataset/SDO/validation',
                                patch_size=patch_size)
-    val_dataloader = DataLoader(val_dataset,
+    val_dataloader = DataLoader(nc.SafeDataset(val_dataset),
                                 batch_size=1,
                                 num_workers=num_workers,
                                 shuffle=True)

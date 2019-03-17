@@ -97,7 +97,7 @@ def train(unet,
             dice = dice_coeff(pred_masks, true_masks).item()
             writer.add_scalar('train/unet/bce-loss', bce_loss.item(), step)
             writer.add_scalar('train/unet/dice-coeff', dice, step)
-            writer.add_scalar('train/siamese/contras-loss', contrastive_loss.item(), step)
+            writer.add_scalar('train/siamese/contrastive-loss', contrastive_loss.item(), step)
             writer.add_scalar('train/siamese/class-loss', class_loss.item(), step)
 
             print('Observation', obs['date'][0], '| loss:',

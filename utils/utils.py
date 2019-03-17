@@ -8,7 +8,6 @@ import astropy.units as u
 from sunpy.coordinates import frames
 from sunpy.physics.differential_rotation import solar_rotate_coordinate
 
-# FENNEC'S FUNCTIONS
 
 def rotate_coord(map, coord, date):
     coord_sc = SkyCoord(
@@ -21,14 +20,23 @@ def rotate_coord(map, coord, date):
     px = map.world_to_pixel(rotated_coord_sc)
     return [(int(px.x[i].value),int(px.y[i].value)) for i in range(len(px.x))]
 
+def bbox(img):
+    a = np.where(img != 0)
+    bbox = [np.min(a[0]), np.max(a[0]), np.min(a[1]), np.max(a[1])]
+    return bbox
+
 def patchify(full_disk, full_disk_mask, patch_size, overlap):
     patches = []
     masks = []
+    ph = patch_size // 2
+    padded = np.pad(full_disk, ((ph,ph),(ph,ph)), mode='constant')
+    padded_mask = np.pad(full_disk_mask, ((ph,ph),(ph,ph)), mode='constant')
     stride = int(patch_size - (overlap * patch_size))
-    for x in range(0, full_disk.shape[0]-patch_size+1, stride):
-        for y in range(0, full_disk.shape[1]-patch_size+1, stride):
-            patch = full_disk[x:x+patch_size,y:y+patch_size]
-            mask = full_disk_mask[x:x+patch_size,y:y+patch_size]
+    xmin, xmax, ymin, ymax = bbox(padded_mask)
+    for x in range(xmin-ph, xmax+ph+1, stride):
+        for y in range(ymin-ph, ymax-ph+1, stride):
+            patch = padded[x:x+patch_size,y:y+patch_size]
+            mask = padded_mask[x:x+patch_size,y:y+patch_size]
             patches.append([patch])
             masks.append([mask])
     return np.array(patches), np.array(masks)

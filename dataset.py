@@ -7,7 +7,7 @@ from utils.utils import patchify, sample_patches, sample_sunspot_pairs
 
 class HelioDataset(Dataset):
     def __init__(self, sidc_path, ground_dir, SDO_dir, patch_size=200,
-                 overlap=0.4, sunspots_per_patch=10):
+                 overlap=0.5, sunspots_per_patch=10):
         super(Dataset, self).__init__()
 
         self.overlap = overlap

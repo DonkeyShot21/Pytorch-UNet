@@ -58,6 +58,17 @@ def train(unet,
     contrastive = ContrastiveLoss(margin=2)
 
     for epoch in range(1,epochs+1):
+
+        if 1:
+            eval(unet,
+                 siamese,
+                 device,
+                 patch_size=patch_size,
+                 num_workers=num_workers,
+                 epoch=epoch,
+                 writer=writer,
+                 num_viz=3)
+
         unet.train()
         siamese.train()
         print('Starting epoch {}/{}.'.format(epoch, epochs))

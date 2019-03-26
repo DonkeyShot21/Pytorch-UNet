@@ -22,13 +22,8 @@ def eval(net, siamese, device, patch_size, num_workers, writer, epoch,
         if int(ep) == epoch:
             cp_path = os.path.join(cp_dir, cp)
 
-    if gpu:
-        net.cuda()
-        net.load_state_dict(torch.load(cp_path))
-    else:
-        net.cpu()
-        net.load_state_dict(torch.load(cp_path, map_location='cpu'))
-
+    net.load_state_dict(torch.load(cp_path))
+    net.to(device)
     net.eval()
     siamese.eval()
     bce = BCELoss()

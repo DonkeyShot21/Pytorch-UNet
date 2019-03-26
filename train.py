@@ -63,6 +63,9 @@ def train(unet,
         print('Starting epoch {}/{}.'.format(epoch, epochs))
         for obs_idx, obs in enumerate(dataloader):
 
+            if obs == 0:
+                continue
+
             # # --- TRAIN UNET --- #
             # patches = obs['patches'][0].float().to(device)
             # true_masks = obs['masks'][0].float().to(device)

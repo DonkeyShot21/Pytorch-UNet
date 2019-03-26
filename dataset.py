@@ -90,7 +90,7 @@ class HelioDataset(Dataset):
             print('Error on image', self.data[idx]['img_path'])
             with open('/homeRAID/efini/logs/corrupted.txt', 'a+') as f:
                 f.write(self.data[idx]['img_path'] + ' ' + self.data[idx]['mask_path'] + '\n')
-            return None
+            return 0
 
 
 class HelioDatasetVal(Dataset):
@@ -179,7 +179,7 @@ class HelioDatasetVal(Dataset):
             print('Error on image', self.data[idx]['img_path'])
             with open('/homeRAID/efini/logs/corrupted.txt', 'a+') as f:
                 f.write(self.data[idx]['img_path'] + ' ' + self.data[idx]['mask_path'] + '\n')
-            return None
+            return 0
 
 
 

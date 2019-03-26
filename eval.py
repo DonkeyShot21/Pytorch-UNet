@@ -47,6 +47,10 @@ def eval(net, siamese, device, patch_size, num_workers, writer, epoch,
     viz = []
     val_loss = {'bce': 0, 'dice': 0}
     for obs_idx, obs in enumerate(val_dataloader):
+
+        if obs == 0:
+            continue
+
         obs_loss = {'bce': 0, 'dice': 0}
         patches = obs['patches'][0].float().to(device)
         true_masks = obs['masks'][0]. float().to(device)

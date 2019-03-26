@@ -1,9 +1,9 @@
-import torch
+import torch, os
 from torch.nn import BCELoss
 import torch.nn.functional as F
-from dataset import HelioDataset
+from dataset import HelioDatasetVal
 from torch.utils.data import DataLoader
-from loss import dice_coeff
+from loss import dice_coeff, ContrastiveLoss
 from utils import plot_mask, to_uint8
 import torchvision.utils as vutils
 from torch import Tensor
@@ -12,13 +12,30 @@ from PIL import Image
 import nonechucks as nc
 
 
-def eval(net, device, patch_size, num_workers, writer, epoch,
+def eval(net, siamese, device, patch_size, num_workers, writer, epoch,
          gpu=False, num_viz=3):
     print('Starting validation')
-    net.eval()
-    bce = BCELoss()
 
-    val_dataset = HelioDataset('data/sidc/SIDC_dataset.csv',
+    cp_dir = '/homeRAID/efini/checkpoints/'
+    for cp in os.listdir(cp_dir):
+        ep = cp.replace('CP512-', '').replace('.pth', '')
+        if int(ep) == epoch:
+            cp_path = os.path.join(cp_dir, cp)
+
+    if gpu:
+        net.cuda()
+        net.load_state_dict(torch.load(cp_path))
+    else:
+        net.cpu()
+        net.load_state_dict(torch.load(cp_path, map_location='cpu'))
+
+    net.eval()
+    siamese.eval()
+    bce = BCELoss()
+    contrastive = ContrastiveLoss(margin=2)
+
+
+    val_dataset = HelioDatasetVal('data/sidc/SIDC_dataset.csv',
                                '/homeRAID/efini/dataset/ground/validation',
                                '/homeRAID/efini/dataset/SDO/validation',
                                patch_size=patch_size)
@@ -39,10 +56,6 @@ def eval(net, device, patch_size, num_workers, writer, epoch,
         bce_loss = bce(pred_masks_flat, true_masks_flat)
         pred_masks = (pred_masks > 0.5).float()
         dice = dice_coeff(pred_masks, true_masks).item()
-        val_loss['bce'] += obs_loss['bce']
-        val_loss['dice'] +=  obs_loss['dice']
-        print('Observation', obs['date'][0], '| validation loss:',
-              '> bce: {:.6f} > dice {:.6f}'.format(bce_loss.item(), dice))
 
         if obs_idx < num_viz:
             patches_np = to_uint8(np.array(patches.cpu()))
@@ -53,8 +66,31 @@ def eval(net, device, patch_size, num_workers, writer, epoch,
                                for i in range(len(patches))])
             viz.extend(plots.reshape(2*len(patches),*plots.shape[2:]))
 
+        step = (epoch-1) * len(val_dataset) + obs_idx
+        writer.add_scalar('val/unet/bce-loss', bce_loss.item(), step)
+        writer.add_scalar('val/unet/dice-coeff', dice, step)
 
-    val_loss.update({k:v/len(val_dataset) for k,v in val_loss.items()})
+        # --- EVAL SIAMESE --- #
+        anchors = obs['anchors'][0].float().to(device)
+        others = obs['others'][0].float().to(device)
+        gt_class_others =  obs['class_others'][0].float().to(device)
+        gt_similarity = obs['similarity'][0].float().to(device)
+        emb_anchor, emb_other, _, pred_class_others = siamese(anchors, others)
+        contrastive_loss = contrastive(emb_anchor, emb_other, gt_similarity)
+        class_loss = bce(pred_class_others, gt_class_others.squeeze())
+
+        # log
+        writer.add_scalar('val/siamese/contrastive-loss', contrastive_loss.item(), step)
+        writer.add_scalar('val/siamese/class-loss', class_loss.item(), step)
+
+        print('Observation', obs['date'][0], '| validation loss:',
+              '> bce: {:.6f} > dice {:.6f}'.format(bce_loss.item(), dice),
+              '> contrastive: {:.6f} > classification {:.6f}'
+              .format(contrastive_loss.item(), class_loss.item()))
+
+
+
+    # val_loss.update({k:v/len(val_dataset) for k,v in val_loss.items()})
     writer.add_scalar('val/bce-loss', val_loss['bce'], epoch)
     writer.add_scalar('val/dice-coeff', val_loss['dice'], epoch)
     viz = Tensor(viz).permute(0,3,1,2)

@@ -42,7 +42,7 @@ def train(unet,
                            '/homeRAID/efini/dataset/ground/train',
                            '/homeRAID/efini/dataset/SDO/train',
                            patch_size=patch_size)
-    dataloader = DataLoader(nc.SafeDataset(dataset),
+    dataloader = DataLoader(dataset, #nc.SafeDataset(dataset),
                             batch_size=1,
                             num_workers=num_workers,
                             shuffle=True)
@@ -60,19 +60,30 @@ def train(unet,
     for epoch in range(1,epochs+1):
         unet.train()
         siamese.train()
+
+        if 1:
+            eval(unet,
+                 siamese,
+                 device,
+                 patch_size=patch_size,
+                 num_workers=num_workers,
+                 epoch=epoch,
+                 writer=writer,
+                 num_viz=3)
+
         print('Starting epoch {}/{}.'.format(epoch, epochs))
         for obs_idx, obs in enumerate(dataloader):
 
-            # --- TRAIN UNET --- #
-            patches = obs['patches'][0].float().to(device)
-            true_masks = obs['masks'][0].float().to(device)
-            pred_masks = unet(patches)
-            pred_masks_flat = pred_masks.view(-1)
-            true_masks_flat = true_masks.view(-1)
-            bce_loss = bce(pred_masks_flat, true_masks_flat)
-            unet_optimizer.zero_grad()
-            bce_loss.backward()
-            unet_optimizer.step()
+            # # --- TRAIN UNET --- #
+            # patches = obs['patches'][0].float().to(device)
+            # true_masks = obs['masks'][0].float().to(device)
+            # pred_masks = unet(patches)
+            # pred_masks_flat = pred_masks.view(-1)
+            # true_masks_flat = true_masks.view(-1)
+            # bce_loss = bce(pred_masks_flat, true_masks_flat)
+            # unet_optimizer.zero_grad()
+            # bce_loss.backward()
+            # unet_optimizer.step()
 
             # check if the observation can be used to train the siamese
             if len(obs['anchors'].shape) < 2:
@@ -93,15 +104,15 @@ def train(unet,
 
             # log
             step = (epoch-1) * len(dataset) + obs_idx
-            pred_masks = (pred_masks > 0.5).float()
-            dice = dice_coeff(pred_masks, true_masks).item()
-            writer.add_scalar('train/unet/bce-loss', bce_loss.item(), step)
-            writer.add_scalar('train/unet/dice-coeff', dice, step)
+            # pred_masks = (pred_masks > 0.5).float()
+            # dice = dice_coeff(pred_masks, true_masks).item()
+            # writer.add_scalar('train/unet/bce-loss', bce_loss.item(), step)
+            # writer.add_scalar('train/unet/dice-coeff', dice, step)
             writer.add_scalar('train/siamese/contrastive-loss', contrastive_loss.item(), step)
             writer.add_scalar('train/siamese/class-loss', class_loss.item(), step)
 
             print('Observation', obs['date'][0], '| loss:',
-                  '> bce: {:.6f} > dice {:.6f}'.format(bce_loss.item(), dice),
+                  # '> bce: {:.6f} > dice {:.6f}'.format(bce_loss.item(), dice),
                   '> contrastive: {:.6f} > classification {:.6f}'
                   .format(contrastive_loss.item(), class_loss.item()))
 
@@ -110,6 +121,7 @@ def train(unet,
 
         if 1:
             eval(unet,
+                 siamese,
                  device,
                  patch_size=patch_size,
                  num_workers=num_workers,
@@ -119,8 +131,8 @@ def train(unet,
 
 
         if save_cp:
-            torch.save(unet.state_dict(),
-                       dir_checkpoint + 'CP512-{}.pth'.format(epoch))
+            torch.save(siamese.state_dict(),
+                       dir_checkpoint + 'CPSiamese-{}.pth'.format(epoch))
             print('Checkpoint {} saved !'.format(epoch))
 
 

@@ -39,7 +39,7 @@ def eval(net, siamese, device, patch_size, num_workers, writer, epoch,
                                '/homeRAID/efini/dataset/ground/validation',
                                '/homeRAID/efini/dataset/SDO/validation',
                                patch_size=patch_size)
-    val_dataloader = DataLoader(nc.SafeDataset(val_dataset),
+    val_dataloader = DataLoader(val_dataset, #nc.SafeDataset(val_dataset),
                                 batch_size=1,
                                 num_workers=num_workers,
                                 shuffle=True)

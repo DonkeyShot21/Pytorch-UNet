@@ -60,17 +60,6 @@ def train(unet,
     for epoch in range(1,epochs+1):
         unet.train()
         siamese.train()
-
-        if 1:
-            eval(unet,
-                 siamese,
-                 device,
-                 patch_size=patch_size,
-                 num_workers=num_workers,
-                 epoch=epoch,
-                 writer=writer,
-                 num_viz=3)
-
         print('Starting epoch {}/{}.'.format(epoch, epochs))
         for obs_idx, obs in enumerate(dataloader):
 

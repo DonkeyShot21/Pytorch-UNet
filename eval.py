@@ -19,7 +19,7 @@ def eval(net, siamese, device, patch_size, num_workers, writer, epoch,
     cp_dir = '/homeRAID/efini/checkpoints/'
     for cp in os.listdir(cp_dir):
         ep = cp.replace('CP512-', '').replace('.pth', '')
-        if int(ep) == epoch:
+        if ep == str(epoch):
             cp_path = os.path.join(cp_dir, cp)
 
     net.load_state_dict(torch.load(cp_path))

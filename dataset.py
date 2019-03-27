@@ -62,7 +62,7 @@ class HelioDataset(Dataset):
             ground_truth = cv2.imread(self.data[idx]['mask_path'], -1)
             full_disk_mask = np.clip(ground_truth[:,:,2], 0, 1)
             #
-            # sunspot_number = self.data[idx]['sunspot_number']
+            sunspot_number = self.data[idx]['sunspot_number']
             # num_patches = sunspot_number // self.sunspots_per_patch
             # patches, masks = patchify(full_disk, full_disk_mask,
             #                           patch_size=self.patch_size,
@@ -83,7 +83,7 @@ class HelioDataset(Dataset):
                     # 'others': siamese_input[1],
                     # 'class_others': siamese_gt[2],
                     # 'similarity': siamese_gt[0],
-                    # 'sunspot_number': sunspot_number,
+                    'sunspot_number': sunspot_number,
                     'date': self.data[idx]['date']}
 
         except Exception as e:

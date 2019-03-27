@@ -57,7 +57,7 @@ def estimate(siamese, device, num_workers):
             for eps in np.linspace(0.02,1,50):
                 pred_clusters = DBSCAN(eps=eps, min_samples=0).fit_predict(embeddings)
                 ari[eps] += adjusted_rand_score(pred_clusters, true_clusters[1:])
-                print(np.amax(pred_clusters), len(set(true_clusters[1:])))
+                # print(np.amax(pred_clusters), len(set(true_clusters[1:])))
                 # print("ARI:", adjusted_rand_score(pred_clusters, true_clusters[1:]))
 
             # plt.plot(ari.keys(), ari.values())

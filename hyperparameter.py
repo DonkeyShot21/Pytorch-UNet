@@ -51,7 +51,7 @@ def estimate(siamese, device, num_workers):
                                           output_size=(100,100))
                 e = siamese.embed(torch.stack([features]).float().to(device))
                 # embeddings.append(px_to_latlon(centers[idx], 2000))
-                embeddings.append(e.squeeze().detach().numpy())
+                embeddings.append(e.cpu().squeeze().detach().numpy())
 
             # predict
             for eps in np.linspace(0.02,1,50):

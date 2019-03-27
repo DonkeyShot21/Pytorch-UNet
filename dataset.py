@@ -68,25 +68,26 @@ class HelioDataset(Dataset):
             #                           patch_size=self.patch_size,
             #                           overlap=self.overlap)
             # patches, masks = sample_patches(patches, masks, num_patches)
-            siamese_input, siamese_gt = sample_sunspot_pairs(full_disk,
-                                                             full_disk_mask,
-                                                             ground_truth[:,:,2],
-                                                             ground_truth[:,:,1],
-                                                             num_anchors=1)
+            # siamese_input, siamese_gt = sample_sunspot_pairs(full_disk,
+            #                                                  full_disk_mask,
+            #                                                  ground_truth[:,:,2],
+            #                                                  ground_truth[:,:,1],
+            #                                                  num_anchors=1)
             return {'full_disk': full_disk,
                     'full_disk_mask': full_disk_mask,
                     'full_disk_instances': ground_truth[:,:,2],
                     'full_disk_classes': ground_truth[:,:,1],
                     # 'patches': patches,
                     # 'masks': masks,
-                    'anchors': siamese_input[0],
-                    'others': siamese_input[1],
-                    'class_others': siamese_gt[2],
-                    'similarity': siamese_gt[0],
+                    # 'anchors': siamese_input[0],
+                    # 'others': siamese_input[1],
+                    # 'class_others': siamese_gt[2],
+                    # 'similarity': siamese_gt[0],
                     # 'sunspot_number': sunspot_number,
                     'date': self.data[idx]['date']}
 
-        except:
+        except Exception as e:
+            print(e)
             print('Error on image', self.data[idx]['img_path'])
             with open('/homeRAID/efini/logs/corrupted.txt', 'a+') as f:
                 f.write(self.data[idx]['img_path'] + ' ' + self.data[idx]['mask_path'] + '\n')

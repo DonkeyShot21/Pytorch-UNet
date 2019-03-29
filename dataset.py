@@ -15,12 +15,14 @@ class HelioDataset(Dataset):
         self.patch_size = patch_size
 
         self.sidc = pd.read_csv(sidc_path, sep=';', header=None)
-        self.sidc.drop(self.sidc[[3,5,6,7]], axis=1, inplace=True)
-        self.sidc = self.sidc.astype(np.int32)
-        dates = pd.to_datetime(self.sidc[0]*10000+self.sidc[1]*100+self.sidc[2],
+        self.sidc.drop(self.sidc[[3,6,7]], axis=1, inplace=True)
+        self.sidc = self.sidc.astype(np.float32)
+        dates = self.sidc[[0,1,2]].copy().astype(np.int32)
+        dates = pd.to_datetime(dates[0]*10000+dates[1]*100+dates[2],
                                format='%Y%m%d')
         self.sidc['date'] = dates
         self.sidc['sunspot_number'] = self.sidc[4]
+        self.sidc['std_dev'] = self.sidc[5]
         self.sidc.drop(self.sidc[[0,1,2,4]], axis=1, inplace=True)
         self.sidc.set_index('date', inplace=True, drop=True)
 
@@ -31,12 +33,14 @@ class HelioDataset(Dataset):
             img_path = os.path.join(ground_dir, 'images', img_fn)
             date = datetime.strptime(img_fn.split('_')[0],'%Y%m%d')
             sunspot_number = self.sidc.loc[date]['sunspot_number']
+            std_dev = self.sidc.loc[date]['std_dev']
             if sunspot_number < sunspots_per_patch: continue
             mask_fn = img_fn.replace('.png','_mask.png')
             mask_path = os.path.join(ground_dir, 'masks', mask_fn)
             self.data.append({'img_path': img_path,
                               'sunspot_number': sunspot_number,
                               'mask_path': mask_path,
+                              'std_dev': std_dev,
                               'date': date.strftime('%Y-%m-%d')})
 
         # explore SDO directory, match masks and extract sunspot number
@@ -44,12 +48,14 @@ class HelioDataset(Dataset):
             img_path = os.path.join(SDO_dir, 'images', img_fn)
             date = datetime.strptime(img_fn.split('_')[1],'%Y%m%d')
             sunspot_number = self.sidc.loc[date]['sunspot_number']
+            std_dev = self.sidc.loc[date]['std_dev']
             if sunspot_number < sunspots_per_patch: continue
             mask_fn = img_fn.replace('.png','_mask.png')
             mask_path = os.path.join(SDO_dir, 'masks', mask_fn)
             self.data.append({'img_path': img_path,
                               'sunspot_number': sunspot_number,
                               'mask_path': mask_path,
+                              'std_dev': std_dev,
                               'date': date.strftime('%Y-%m-%d')})
 
     def __len__(self):
@@ -63,6 +69,8 @@ class HelioDataset(Dataset):
             full_disk_mask = np.clip(ground_truth[:,:,2], 0, 1)
             #
             sunspot_number = self.data[idx]['sunspot_number']
+            std_dev = self.data[idx]['std_dev']
+
             # num_patches = sunspot_number // self.sunspots_per_patch
             # patches, masks = patchify(full_disk, full_disk_mask,
             #                           patch_size=self.patch_size,
@@ -84,6 +92,7 @@ class HelioDataset(Dataset):
                     # 'class_others': siamese_gt[2],
                     # 'similarity': siamese_gt[0],
                     'sunspot_number': sunspot_number,
+                    'std_dev': std_dev,
                     'date': self.data[idx]['date']}
 
         except Exception as e:

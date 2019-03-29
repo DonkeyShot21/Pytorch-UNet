@@ -143,6 +143,78 @@ def estimate_k(siamese, device, num_workers, eps):
     return
 
 
+def estimate_final(siamese, device, num_workers, eps, k):
+    print('Starting hyperparameter tuning')
+
+    val_dataset = HelioDataset('data/sidc/SIDC_dataset.csv',
+                               '/homeRAID/efini/dataset/ground/test',
+                               '/homeRAID/efini/dataset/SDO/test',
+                               patch_size=200,
+                               overlap=0.0)
+    val_dataloader = DataLoader(val_dataset,
+                                batch_size=1,
+                                num_workers=num_workers,
+                                shuffle=True)
+
+    tot_obs = 0
+    final = dict()
+    for obs_idx, obs in enumerate(val_dataloader):
+        try:
+            if obs == 0:
+                continue
+
+            disk = np.array(obs['full_disk'][0])
+            mask = np.array(obs['full_disk_mask'][0])
+            instances = np.array(obs['full_disk_instances'][0])
+            silso_ss_num = obs['sunspot_number']
+            std_dev =  obs['std_dev']
+            print(obs['date'], obs_idx)
+
+            n, labels, stats, centers = cv2.connectedComponentsWithStats(mask)
+            disk_area = mask.shape[0] * mask.shape[1] - stats[0][4]
+
+            true_clusters = [int(instances[labels==i][0]) for i in range(n)]
+            embeddings = []
+
+            for idx in range(1,n):
+                features = build_channels(img=disk,
+                                          stats=stats[idx],
+                                          center=centers[idx],
+                                          disk_area=disk_area,
+                                          output_size=(100,100))
+                e = siamese.embed(torch.stack([features]).float().to(device))
+                # embeddings.append(px_to_latlon(centers[idx], 2000))
+                embeddings.append(e.cpu().squeeze().detach().numpy())
+
+            # predict
+            pred_clusters = DBSCAN(eps=eps, min_samples=0).fit_predict(embeddings)
+            # ari[eps] += adjusted_rand_score(pred_clusters, true_clusters[1:])
+            # print(np.amax(pred_clusters), len(set(true_clusters[1:])))
+            # print("ARI:", adjusted_rand_score(pred_clusters, true_clusters[1:]))
+
+            # plt.plot(ari.keys(), ari.values())
+            # plt.show()
+
+            our_groups = (np.amax(pred_clusters) + 1 + 5* len(set(true_clusters[1:]))) / 6
+            our_ss_num = k * (10*our_groups + n)
+            error = abs(silso_ss_num - our_ss_num)
+            day = {'our': our_ss_num, 'silso': silso_ss_num, 'silso_std_dev':float(std_dev[0]), 'error': float(error[0]) }
+            final[obs['date'][0]] = day
+            print(day)
+
+
+        except Exception as e:
+            print('Error in validation')
+            print(e)
+            continue
+        tot_obs += 1
+
+    pickle.dump(final,open('/homeRAID/efini/logs/final.pkl',"wb"))
+
+    return
+
+
+
 def get_args():
     parser = OptionParser()
     parser.add_option('-g', '--gpu', action='store_true', dest='gpu',
@@ -174,4 +246,4 @@ if __name__ == '__main__':
     siamese = siamese.to(device)
     siamese.eval()
 
-    estimate_k(siamese, device, args.num_workers, args.eps)
+    estimate_final(siamese, device, args.num_workers, args.eps, 0.58)

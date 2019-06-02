@@ -195,7 +195,7 @@ def estimate_final(siamese, device, num_workers, eps, k):
             # plt.plot(ari.keys(), ari.values())
             # plt.show()
 
-            our_groups = (np.amax(pred_clusters) + 1 + 5* len(set(true_clusters[1:]))) / 6
+            our_groups = np.amax(pred_clusters)
             our_ss_num = k * (10*our_groups + n)
             error = abs(silso_ss_num - our_ss_num)
             day = {'our': our_ss_num, 'silso': silso_ss_num, 'silso_std_dev':float(std_dev[0]), 'error': float(error[0]) }
